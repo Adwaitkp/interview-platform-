@@ -1,0 +1,110 @@
+<div class="p-6">
+
+  <div class="flex justify-between items-center mb-4">
+    <h1 class="text-2xl font-bold">Accepted Questions</h1>
+  </div>
+
+  <!-- Search and Filters -->
+  <div class="mb-4 flex gap-4">
+    <input [(ngModel)]="searchTerm" (input)="filterQuestions()" placeholder="Search questions..."
+      class="border p-2 rounded flex-1">
+    <input [(ngModel)]="candidateNameSearch" (input)="searchByCandidateName()" placeholder="Search by candidate name..."
+      class="border p-2 rounded flex-1">
+    <select [(ngModel)]="selectedSkill" (change)="filterQuestions()" class="border p-2 rounded">
+      <option value="">All Skills</option>
+      <option *ngFor="let skill of skills" [value]="skill">{{skill}}</option>
+    </select>
+    <select [(ngModel)]="selectedLevel" (change)="filterQuestions()" class="border p-2 rounded">
+      <option value="">All Levels</option>
+      <option *ngFor="let level of levels" [value]="level">{{level | titlecase}}</option>
+    </select>
+    <button (click)="navigateToReviwe()"
+      class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+      Back to Review
+    </button>
+  </div>
+
+  <!-- Loading -->
+  <div *ngIf="loading" class="text-center py-4">Loading accepted questions...</div>
+
+  <!-- Table of Questions -->
+  <table *ngIf="!loading" class="min-w-full divide-y divide-gray-200">
+    <thead class="bg-gray-50 text-left text-sm font-semibold text-gray-700">
+      <tr>
+        <th class="px-4 py-3">Skill</th>
+        <th class="px-4 py-3">Level</th>
+        <th class="px-4 py-3">Question</th>
+        <th class="px-4 py-3">Correct Answer</th>
+        <th class="px-4 py-3">Candidate Name</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100 text-sm text-gray-800">
+      <tr *ngFor="let q of paginatedQuestions" (dblclick)="showQuestionDetails(q)"
+        class="hover:bg-gray-50 transition cursor-pointer">
+        <td class="px-4 py-3">{{ q.skill }}</td>
+        <td class="px-4 py-3">{{ q.level | titlecase }}</td>
+        <td class="px-4 py-3">{{ q.question }}</td>
+        <td class="px-4 py-3">{{ q.correctanswer }}</td>
+        <td class="px-4 py-3">{{ q.assignedTo?.name || 'Not Assigned' }}</td>
+      </tr>
+      <tr *ngIf="filteredQuestions.length === 0">
+        <td colspan="5" class="px-4 py-6 text-center text-gray-500">No accepted questions found</td>
+      </tr>
+    </tbody>
+  </table>
+
+
+  <!-- Pagination Bar -->
+  <div *ngIf="!loading && filteredQuestions.length > 0" class="mt-4 flex justify-center items-center gap-2">
+    <button (click)="currentPage = currentPage - 1" [disabled]="currentPage === 0"
+      class="px-3 py-1 border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
+      Prev
+    </button>
+    <button *ngIf="totalPagesArray().length > 0" (click)="currentPage = 0"
+      [class]="currentPage === 0 ? 'px-3 py-1 bg-blue-600 text-white rounded' : 'px-3 py-1 border rounded hover:bg-gray-100'">
+      1
+    </button>
+    <span *ngIf="currentPage > 2" class="px-2">...</span>
+    <button *ngFor="let pageIndex of getVisiblePages()" (click)="currentPage = pageIndex"
+      [class]="currentPage === pageIndex ? 'px-3 py-1 bg-blue-600 text-white rounded' : 'px-3 py-1 border rounded hover:bg-gray-100'">
+      {{pageIndex + 1}}
+    </button>
+    <span *ngIf="currentPage < totalPagesArray().length - 3" class="px-2">...</span>
+    <button *ngIf="totalPagesArray().length > 1 && currentPage !== totalPagesArray().length - 1"
+      (click)="currentPage = totalPagesArray().length - 1"
+      [class]="currentPage === totalPagesArray().length - 1 ? 'px-3 py-1 bg-blue-600 text-white rounded' : 'px-3 py-1 border rounded hover:bg-gray-100'">
+      {{totalPagesArray().length}}
+    </button>
+    <button (click)="currentPage = currentPage + 1" [disabled]="currentPage >= totalPagesArray().length - 1"
+      class="px-3 py-1 border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
+      Next
+    </button>
+  </div>
+
+  <!-- Question Details Modal -->
+  <div *ngIf="selectedQuestion"
+    class="fixed inset-0 bg-black/20 bg-opacity-5 backdrop-blur flex items-center justify-center z-50">
+    <div class="bg-white p-6 rounded shadow-lg w-96 max-w-[30rem] mx-4">
+      <h2 class="text-lg font-bold mb-2">Question Details</h2>
+      <div class="mb-4 text-gray-800 font-medium">{{ selectedQuestion.question }}</div>
+      <h3 class="text-md font-semibold mb-2">Options</h3>
+      <ul class="mb-4 space-y-1">
+        <li *ngFor="let option of getOptionKeys()" class="py-1">
+          <span class="font-semibold">{{ option }}:</span> {{ selectedQuestion.options[option] }}
+        </li>
+      </ul>
+      <div class="mb-4">
+        <span class="font-semibold">Correct Answer:</span> {{ selectedQuestion.correctanswer }}
+      </div>
+      <div class="mb-4">
+        <span class="font-semibold">Assigned To:</span> {{ selectedQuestion.assignedTo?.name || 'Not Assigned' }}
+      </div>
+      <div class="flex justify-end ">
+      <button (click)="closeQuestionDetails()"
+        class="py-2 px-4 bg-gray-300 text-gray-800 font-semibold rounded-md hover:bg-gray-400 transition">
+        Close
+      </button>
+      </div>
+    </div>
+  </div>
+</div>

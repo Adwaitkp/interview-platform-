@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+
+/* Custom Directives */
+.custom-dialog{
+    @apply fixed inset-0 bg-black/10 backdrop-blur-sm overflow-y-auto h-full w-full z-50;
+   
+}
+
+

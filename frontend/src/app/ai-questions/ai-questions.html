@@ -1,0 +1,165 @@
+<div class="bg-gray-50 p-6">
+  <div class="flex justify-between items-center mb-4">
+    <h1 class="text-2xl font-bold">AI Question Review</h1>
+  </div>
+
+  <!-- Search and Filters -->
+  <div class="mb-4 flex gap-4">
+    <input [(ngModel)]="searchTerm" (input)="filterQuestions()" placeholder="Search questions..."
+      class="border p-2 rounded flex-1">
+    <select [(ngModel)]="skillFilter" (change)="loadQuestions()" class="border p-2 rounded">
+      <option value="">All Skills</option>
+      <option *ngFor="let skill of availableSkills" [value]="skill">{{skill}}</option>
+    </select>
+    <select [(ngModel)]="levelFilter" (change)="loadQuestions()" class="border p-2 rounded">
+      <option value="">All Levels</option>
+      <option *ngFor="let level of availableLevels" [value]="level">{{level}}</option>
+    </select>
+    <button (click)="showApproveAllConfirmation()" [disabled]="isBulkProcessing || questions.length === 0"
+      class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed">
+      <svg *ngIf="isBulkProcessing" class="w-5 h-5 mr-2 animate-spin" fill="none" stroke="currentColor"
+        viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+        </path>
+      </svg>
+      {{ isBulkProcessing ? 'Processing...' : 'Accept All Questions' }}
+    </button>
+    <button (click)="navigateToAcceptedQuestions()"
+      class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+      Accepted Questions
+    </button>
+  </div>
+
+  <!-- Loading -->
+  <div *ngIf="loading" class="text-center py-4">Loading AI questions...</div>
+
+  <!-- Table of Questions -->
+  <table *ngIf="!loading" class="min-w-full divide-y divide-gray-200">
+    <thead class="bg-gray-50 text-left text-sm font-semibold text-gray-700">
+      <tr>
+        <th class="px-4 py-3">Skill</th>
+        <th class="px-4 py-3">Level</th>
+        <th class="px-4 py-3">Question</th>
+        <th class="px-4 py-3">Correct Answer</th>
+        <th class="px-4 py-3 text-center">Actions</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100 text-sm text-gray-800">
+      <tr *ngFor="let q of questions" (dblclick)="showQuestionDetails(q)" class="hover:bg-gray-50 transition">
+        <td class="px-4 py-3">{{ q.skill }}</td>
+        <td class="px-4 py-3">{{ q.level }}</td>
+        <td class="px-4 py-3">{{ q.question }}</td>
+        <td class="px-4 py-3">{{ q.correctanswer }}</td>
+        <td class="px-4 py-3 flex items-center justify-center gap-2">
+          <button (click)="approveQuestion(q._id); $event.stopPropagation()"
+            [disabled]="isProcessing(q._id) || q.reviewStatus === 'approved'"
+            [ngClass]="q.reviewStatus === 'approved' ? 'text-green-600 font-bold cursor-default' : 'text-blue-600 hover:text-blue-800 transition-colors duration-200'"
+            title="Approve">
+            <!-- Check Icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+              stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </button>
+          <button (click)="showDeleteConfirmation(q._id); $event.stopPropagation()" [disabled]="isProcessing(q._id)"
+            class="text-red-600 hover:text-red-800 transition-colors duration-200" title="Delete">
+            <!-- Cross Icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24"
+              stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </td>
+      </tr>
+      <tr *ngIf="questions.length === 0">
+        <td colspan="5" class="px-4 py-6 text-center text-gray-500">No AI questions found</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Approve All Confirmation Modal -->
+  <div *ngIf="showApproveAllModal" class="custom-dialog">
+    <div class="relative top-65 mx-auto p-5 border w-100 shadow-lg rounded-md bg-white">
+      <div class="mt-1">
+        <div class="mt-4">
+          <p class="text-sm text-gray-500 text-center">Are you sure you want to approve all {{questions.length}}
+            questions?</p>
+        </div>
+        <div class="flex gap-3 justify-end mt-6">
+          <button (click)="handleApproveAllModalAction(true)"
+            class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-200">
+            Yes
+          </button>
+          <button (click)="handleApproveAllModalAction(false)"
+            class="px-4 py-2 bg-gray-300 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors duration-200">
+            No
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div *ngIf="deleteQuestionId" class="custom-dialog">
+    <div class="relative top-45 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+      <div class="mt-1">
+        <h3 class="text-lg font-medium text-black">Delete Question</h3>
+        <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
+          <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z">
+            </path>
+          </svg>
+        </div>
+        <div class="mt-2">
+          <p class="text-sm text-gray-500">Are you sure you want to delete this question? This action cannot be undone.
+          </p>
+        </div>
+        <div class="flex gap-3 justify-end mt-4">
+          <button (click)="confirmDelete()"
+            class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors duration-200">
+            Delete
+          </button>
+          <button (click)="cancelDelete()"
+            class="px-4 py-2 bg-gray-300 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors duration-200">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Question Details Modal (Always Centered) -->
+  <div *ngIf="selectedQuestion"
+    class="fixed inset-0 bg-black/20 bg-opacity-5 backdrop-blur flex items-center justify-center z-50">
+    <div class="bg-white p-6 rounded shadow-lg w-96 max-w-[30rem] mx-4">
+      <h2 class="text-lg font-bold mb-2">Question Details</h2>
+      <div class="mb-4 text-gray-800 font-medium">{{ selectedQuestion.question }}</div>
+      <h3 class="text-md font-semibold mb-2">Options</h3>
+      <ul class="mb-4 space-y-1">
+        <li class="py-1">
+          <span class="font-semibold">A:</span> {{ getOptionText(selectedQuestion, 'a') }}
+        </li>
+        <li class="py-1">
+          <span class="font-semibold">B:</span> {{ getOptionText(selectedQuestion, 'b') }}
+        </li>
+        <li class="py-1">
+          <span class="font-semibold">C:</span> {{ getOptionText(selectedQuestion, 'c') }}
+        </li>
+        <li class="py-1">
+          <span class="font-semibold">D:</span> {{ getOptionText(selectedQuestion, 'd') }}
+        </li>
+      </ul>
+      <div class="mb-4">
+        <span class="font-semibold">Correct Answer:</span> {{ selectedQuestion.correctanswer }}
+      </div>
+      <div class="flex justify-end">
+        <button (click)="closeQuestionDetails()"
+          class="py-2 px-4 bg-gray-300 text-gray-800 font-semibold rounded-md hover:bg-gray-400 transition">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

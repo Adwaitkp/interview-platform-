@@ -1,0 +1,123 @@
+<div class="min-h-screen bg-gray-50 p-4">
+  <div class="max-w-4xl mx-auto">
+
+    <!-- Loading State -->
+    <div *ngIf="loading" class="bg-white rounded-lg shadow-md p-8 text-center">
+      <div class="text-gray-500 mb-4">
+        <svg class="animate-spin mx-auto h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+      </div>
+      <h3 class="text-xl font-medium text-gray-900 mb-2">Loading AI Questions...</h3>
+    </div>
+
+    <!-- No Questions Available -->
+    <div *ngIf="!loading && questions.length === 0 && !quizCompleted" class="bg-white rounded-lg shadow-md p-8 text-center">
+      <div class="text-gray-500 mb-4">
+        <svg class="mx-auto h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+        </svg>
+      </div>
+      <h3 class="text-xl font-medium text-gray-900 mb-2">No Questions Available</h3>
+      <p class="text-gray-600">Please contact your administrator to assign AI questions.</p>
+    </div>
+
+    <!-- Quiz Start Button -->
+    <div *ngIf="!loading && questions.length > 0 && !testStarted && !quizCompleted" class="bg-white rounded-lg shadow-md p-8 text-center">
+      <h2 class="text-2xl font-bold text-gray-800 mb-4">AI Quiz</h2>
+      <p class="text-gray-600 mb-6">You have {{ questions.length }} questions to complete.</p>
+      <button (click)="startQuiz()" 
+              class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg">
+        Start AI Quiz
+      </button>
+    </div>
+
+    <!-- AI Quiz Flow -->
+    <div *ngIf="!loading && questions.length > 0 && testStarted && !quizCompleted">
+      
+      <!-- Question Count Display -->
+      <div class="mb-4 p-2 bg-yellow-50 text-yellow-800 text-sm">
+        Question {{ currentQuestionIndex + 1 }} of {{ questions.length }}
+      </div>
+      
+      <!-- Timer -->
+      <div class="mb-4 flex items-center justify-center">
+        <span class="text-lg font-bold text-red-600">Time Left: {{ formattedTimer }}</span>
+      </div>
+      
+      <!-- Current Question -->
+      <div *ngIf="currentQuestion" class="mb-8 p-6 border border-gray-200 rounded-lg bg-white">
+        <!-- Question Info -->
+        <div class="mb-4 text-sm text-gray-600">
+          <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded mr-2">{{ currentQuestion.skill }}</span>
+          <span class="bg-green-100 text-green-800 px-2 py-1 rounded">{{ currentQuestion.level }}</span>
+        </div>
+        
+        <h3 class="text-lg font-medium text-gray-900 mb-4">{{ currentQuestionIndex + 1 }}. {{ currentQuestion.question }}</h3>
+        <div class="space-y-3">
+          <label *ngFor="let option of getOptions(currentQuestion); trackBy: trackByOptionKey"
+                 class="flex items-center p-3 border border-gray-200 rounded-md transition duration-200"
+                 [class.bg-blue-50]="selectedAnswer === option.key && !lockedQuestions[currentQuestion._id] && questionTimers[currentQuestion._id] > 0"
+                 [class.border-blue-500]="selectedAnswer === option.key && !lockedQuestions[currentQuestion._id] && questionTimers[currentQuestion._id] > 0"
+                 [class.cursor-pointer]="!lockedQuestions[currentQuestion._id] && questionTimers[currentQuestion._id] > 0"
+                 [class.cursor-not-allowed]="lockedQuestions[currentQuestion._id] || questionTimers[currentQuestion._id] <= 0"
+                 [class.opacity-60]="lockedQuestions[currentQuestion._id] || questionTimers[currentQuestion._id] <= 0"
+                 [class.hover:bg-gray-50]="!lockedQuestions[currentQuestion._id] && questionTimers[currentQuestion._id] > 0"
+                 (click)="!lockedQuestions[currentQuestion._id] && questionTimers[currentQuestion._id] > 0 ? onAnswerSelect(option.key) : null">
+            <input type="radio"
+                   [name]="'question_' + currentQuestion._id"
+                   [value]="option.key"
+                   [(ngModel)]="selectedAnswer"
+                   (change)="!lockedQuestions[currentQuestion._id] && questionTimers[currentQuestion._id] > 0 ? onAnswerSelect(option.key) : null"
+                   [disabled]="lockedQuestions[currentQuestion._id] || questionTimers[currentQuestion._id] <= 0"
+                   [class.cursor-pointer]="!lockedQuestions[currentQuestion._id] && questionTimers[currentQuestion._id] > 0"
+                   [class.cursor-not-allowed]="lockedQuestions[currentQuestion._id] || questionTimers[currentQuestion._id] <= 0"
+                   class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300">
+            <span class="ml-3 text-gray-700"
+                  [class.cursor-pointer]="!lockedQuestions[currentQuestion._id] && questionTimers[currentQuestion._id] > 0"
+                  [class.cursor-not-allowed]="lockedQuestions[currentQuestion._id] || questionTimers[currentQuestion._id] <= 0">
+              {{ option.key }}. {{ option.value }}
+            </span>
+          </label>
+          
+          <!-- Time's up message -->
+          <div *ngIf="lockedQuestions[currentQuestion._id] || questionTimers[currentQuestion._id] <= 0" 
+               class="text-red-600 font-semibold text-center py-4">
+            Time's up! You cannot change your answer.
+          </div>
+        </div>
+      </div>
+      
+      <!-- Navigation Buttons -->
+      <div class="flex justify-between items-center mb-4">
+        <button (click)="prevQuestion()" 
+                [disabled]="currentQuestionIndex === 0" 
+                class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-l disabled:opacity-50 disabled:cursor-not-allowed">
+          &#8592; Previous
+        </button>
+        <button (click)="currentQuestionIndex === questions.length - 1 ? submitQuiz() : nextQuestion()" 
+                [disabled]="isSubmitting"
+                class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-r disabled:opacity-50 disabled:cursor-not-allowed">
+          {{ currentQuestionIndex === questions.length - 1 ? 'Submit Quiz' : 'Next' }} &#8594;
+        </button>
+      </div>
+    </div>
+
+    <!-- Quiz Complete -->
+    <div *ngIf="quizCompleted" class="bg-white rounded-lg shadow-md p-8 text-center">
+      <div class="mb-6">
+        <div class="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-4">
+          <svg class="w-10 h-10 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+        </div>
+        <h2 class="text-3xl font-bold text-gray-800 mb-4">AI Quiz Completed!</h2>
+        
+      </div>
+    </div>
+
+  </div>
+</div>
