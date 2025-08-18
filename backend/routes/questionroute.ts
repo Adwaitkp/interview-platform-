@@ -3,13 +3,17 @@ import questionCRUDRouter from './question-crud/questionCRUD';
 import { Questions } from '../models/Questions';
 import User from '../models/User';
 import mongoose from 'mongoose';
+import isAdmin from '../middleware/isadmin';
 
 const router = express.Router();
 
 /* GET /questions */
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { skill, level, limit, userId } = req.query;
+    const { skill, level, limit, userId, page, search } = req.query;
+    const pageNum = parseInt(page as string) || 0;
+    const limitNum = parseInt(limit as string) || 10;
+    const searchTerm = search as string || '';
     
     if (userId) {
       try {
@@ -121,17 +125,37 @@ router.get('/', async (req: Request, res: Response) => {
         }
     }
 
-    // Original non-userId logic
+    // Original non-userId logic with pagination and search
     const filter: any = {};
     if (skill) filter.skill = new RegExp(`^${skill}$`, 'i');
     if (level) filter.level = new RegExp(`^${level}$`, 'i');
-    let query = Questions.find(filter);
-    if (limit) {
-      const lim = parseInt(limit as string, 10);
-      if (!isNaN(lim) && lim > 0) query = query.limit(lim);
+    
+    // Add search functionality
+    if (searchTerm) {
+      filter.$or = [
+        { question: { $regex: searchTerm, $options: 'i' } },
+        { skill: { $regex: searchTerm, $options: 'i' } },
+        { level: { $regex: searchTerm, $options: 'i' } }
+      ];
     }
+    
+    // Get total count for pagination
+    const total = await Questions.countDocuments(filter);
+    
+    // Apply pagination
+    let query = Questions.find(filter)
+      .skip(pageNum * limitNum)
+      .limit(limitNum)
+      .sort({ createdAt: -1 });
+    
     const questions = await query;
-    res.status(200).json(questions);
+    
+    res.status(200).json({
+      questions,
+      totalPages: Math.ceil(total / limitNum),
+      currentPage: pageNum,
+      totalQuestions: total
+    });
   } catch (err: any) {
     console.error('Error fetching questions:', err.message || err);
     res.status(500).json({ message: 'Internal server error' });

@@ -24,6 +24,10 @@ interface Question {
     _id: string;
     name: string;
   };
+  generatedBy?: {
+    _id: string;
+    name: string;
+  };
 }
 
 @Component({
@@ -47,6 +51,7 @@ export class AcceptedQuestionsComponent implements OnInit {
 
   currentPage: number = 0;
   pageSize: number = 10;
+  totalPages: number = 0;
 
   constructor(private http: HttpClient, private router: Router) {}
 
@@ -64,13 +69,30 @@ export class AcceptedQuestionsComponent implements OnInit {
 
       const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`);
       
-      // Load only approved AI questions
-      const aiQuestions = await this.http.get<Question[]>(`${environment.apiUrl}/accepted-questions`, { headers }).toPromise();
+      // Prepare query parameters for server-side pagination and search
+      const params: any = {
+        page: this.currentPage,
+        limit: this.pageSize
+      };
+      
+      if (this.searchTerm) params.search = this.searchTerm;
+      if (this.selectedSkill) params.skill = this.selectedSkill;
+      if (this.selectedLevel) params.level = this.selectedLevel;
+      
+      // Load only approved AI questions with pagination and search
+      const response = await this.http.get<any>(`${environment.apiUrl}/accepted-questions`, { 
+        headers,
+        params
+      }).toPromise();
 
-      this.questions = (aiQuestions || []).map(q => ({ ...q, source: 'AI' }));
-
-      this.extractSkillsAndLevels();
-      this.filterQuestions();
+      this.questions = (response.questions || []).map((q: any) => ({ ...q, source: 'AI' }));
+      this.filteredQuestions = this.questions;
+      this.totalPages = response.totalPages;
+      this.currentPage = response.currentPage;
+      
+      if (!this.skills.length || !this.levels.length) {
+        this.extractSkillsAndLevels();
+      }
     } catch (error) {
       console.error('Error loading accepted questions:', error);
     } finally {
@@ -79,12 +101,9 @@ export class AcceptedQuestionsComponent implements OnInit {
   }
 
   async searchByCandidateName(): Promise<void> {
-    if (!this.candidateNameSearch.trim()) {
-      // If search is empty, load all questions
-      this.loadAcceptedQuestions();
-      return;
-    }
-
+    // Reset page when searching by candidate name
+    this.currentPage = 0;
+    
     try {
       this.loading = true;
       const token = localStorage.getItem('token');
@@ -95,14 +114,29 @@ export class AcceptedQuestionsComponent implements OnInit {
 
       const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`);
       
-      // Search by candidate name
-      const aiQuestions = await this.http.get<Question[]>(
-        `${environment.apiUrl}/accepted-questions?candidateName=${encodeURIComponent(this.candidateNameSearch)}`, 
-        { headers }
+      // Prepare query parameters
+      const params: any = {
+        page: this.currentPage,
+        limit: this.pageSize
+      };
+      
+      if (this.candidateNameSearch.trim()) {
+        params.candidateName = this.candidateNameSearch;
+      }
+      
+      if (this.selectedSkill) params.skill = this.selectedSkill;
+      if (this.selectedLevel) params.level = this.selectedLevel;
+      
+      // Search by candidate name with server-side pagination
+      const response = await this.http.get<any>(
+        `${environment.apiUrl}/accepted-questions`, 
+        { headers, params }
       ).toPromise();
 
-      this.questions = (aiQuestions || []).map(q => ({ ...q, source: 'AI' }));
-      this.filterQuestions();
+      this.questions = (response.questions || []).map((q: any) => ({ ...q, source: 'AI' }));
+      this.filteredQuestions = this.questions;
+      this.totalPages = response.totalPages;
+      this.currentPage = response.currentPage;
     } catch (error) {
       console.error('Error searching by candidate name:', error);
     } finally {
@@ -124,20 +158,10 @@ export class AcceptedQuestionsComponent implements OnInit {
   }
 
   filterQuestions(): void {
-    this.filteredQuestions = this.questions.filter(question => {
-      const matchesSearch = !this.searchTerm || 
-        question.question.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
-        question.skill.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
-        question.level.toLowerCase().includes(this.searchTerm.toLowerCase());
-
-      const matchesSkill = !this.selectedSkill || question.skill === this.selectedSkill;
-      const matchesLevel = !this.selectedLevel || question.level === this.selectedLevel;
-
-      return matchesSearch && matchesSkill && matchesLevel;
-    });
-    
     // Reset to first page when filtering
     this.currentPage = 0;
+    // Load questions with server-side filtering
+    this.loadAcceptedQuestions();
   }
 
   navigateToReviwe(): void {
@@ -157,16 +181,18 @@ export class AcceptedQuestionsComponent implements OnInit {
   }
 
   get paginatedQuestions(): Question[] {
-    const start = this.currentPage * this.pageSize;
-    return this.filteredQuestions.slice(start, start + this.pageSize);
+    return this.filteredQuestions;
   }
 
-  totalPagesArray(): number[] {
-    return Array(Math.ceil(this.filteredQuestions.length / this.pageSize)).fill(0).map((x, i) => i);
+  changePage(page: number): void {
+    if (page !== this.currentPage) {
+      this.currentPage = page;
+      this.loadAcceptedQuestions();
+    }
   }
 
   getVisiblePages(): number[] {
-    const total = this.totalPagesArray().length;
+    const total = this.totalPages;
     const maxVisible = 3;
     let start = Math.max(1, this.currentPage - 1);
     let end = Math.min(total - 2, this.currentPage + 1);

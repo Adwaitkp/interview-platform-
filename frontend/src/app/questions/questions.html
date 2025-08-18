@@ -6,8 +6,13 @@
 
   <!-- Search and Filters -->
   <div class="mb-4 flex gap-4">
-    <input [(ngModel)]="searchTerm" (input)="filterQuestions()" placeholder="Search questions..."
-      class="border p-2 rounded flex-1">
+    <div class="flex flex-1">
+      <input [(ngModel)]="searchTerm" (keyup.enter)="filterQuestions()" placeholder="Search questions..."
+        class="border p-2 rounded-l flex-1">
+      <button (click)="filterQuestions()" class="ml-2 px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+        Search
+      </button>
+    </div>
     <select [(ngModel)]="selectedSkill" (change)="onSkillChange()" class="border p-2 rounded">
       <option value="">All Skills</option>
       <option *ngFor="let s of skills" [value]="s">{{s}}</option>
@@ -78,13 +83,13 @@
   <!-- Pagination -->
   <div *ngIf="!loading && filteredQuestions.length > 0" class="mt-4 flex justify-center items-center gap-2">
     <!-- Previous Button -->
-    <button (click)="currentPage = currentPage - 1" [disabled]="currentPage === 0"
+    <button (click)="changePage(currentPage - 1)" [disabled]="currentPage === 0"
       class="px-3 py-1 border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
       Prev
     </button>
 
     <!-- First Page -->
-    <button *ngIf="totalPagesArray().length > 0" (click)="currentPage = 0"
+    <button *ngIf="totalPages > 0" (click)="changePage(0)"
       [class]="currentPage === 0 ? 'px-3 py-1 bg-blue-600 text-white rounded' : 'px-3 py-1 border rounded hover:bg-gray-100'">
       1
     </button>
@@ -99,17 +104,17 @@
     </button>
 
     <!-- Dots after current page range -->
-    <span *ngIf="currentPage < totalPagesArray().length - 3" class="px-2">...</span>
+    <span *ngIf="currentPage < totalPages - 3" class="px-2">...</span>
 
     <!-- Last Page -->
-    <button *ngIf="totalPagesArray().length > 1 && currentPage !== totalPagesArray().length - 1"
-      (click)="currentPage = totalPagesArray().length - 1"
-      [class]="currentPage === totalPagesArray().length - 1 ? 'px-3 py-1 bg-blue-600 text-white rounded' : 'px-3 py-1 border rounded hover:bg-gray-100'">
-      {{totalPagesArray().length}}
+    <button *ngIf="totalPages > 1 && currentPage !== totalPages - 1"
+      (click)="changePage(totalPages - 1)"
+      [class]="currentPage === totalPages - 1 ? 'px-3 py-1 bg-blue-600 text-white rounded' : 'px-3 py-1 border rounded hover:bg-gray-100'">
+      {{totalPages}}
     </button>
 
     <!-- Next Button -->
-    <button (click)="currentPage = currentPage + 1" [disabled]="currentPage >= totalPagesArray().length - 1"
+    <button (click)="changePage(currentPage + 1)" [disabled]="currentPage >= totalPages - 1"
       class="px-3 py-1 border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
       Next
     </button>

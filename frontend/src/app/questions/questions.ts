@@ -33,6 +33,7 @@ export class QuestionsComponent implements OnInit {
   searchTerm: string = '';
   currentPage: number = 0;
   pageSize: number = 10;
+  totalPages: number = 0;
 
   skills: string[] = [];
   levels = ['beginner', 'intermediate', 'advanced'];
@@ -64,10 +65,21 @@ export class QuestionsComponent implements OnInit {
 
   loadQuestions(): void {
     this.loading = true;
-    this.http.get<Question[]>(this.apiUrl).subscribe({
-      next: (questions) => {
-        this.allQuestions = questions;
-        this.filteredQuestions = questions;
+    const params: any = {
+      page: this.currentPage,
+      limit: this.pageSize,
+      search: this.searchTerm
+    };
+    
+    if (this.selectedSkill) params.skill = this.selectedSkill;
+    if (this.selectedLevel) params.level = this.selectedLevel;
+    
+    this.http.get<any>(this.apiUrl, { params }).subscribe({
+      next: (response) => {
+        this.allQuestions = response.questions;
+        this.filteredQuestions = response.questions;
+        this.currentPage = response.currentPage;
+        this.totalPages = response.totalPages;
         this.extractSkills();
         this.loading = false;
       },
@@ -84,13 +96,10 @@ export class QuestionsComponent implements OnInit {
   }
 
   filterQuestions(): void {
+    // Reset to first page when filtering
     this.currentPage = 0;
-    this.filteredQuestions = this.allQuestions.filter(q => {
-      const skillMatch = !this.selectedSkill || q.skill === this.selectedSkill;
-      const levelMatch = !this.selectedLevel || q.level === this.selectedLevel;
-      const searchMatch = !this.searchTerm || q.question.toLowerCase().includes(this.searchTerm.toLowerCase());
-      return skillMatch && levelMatch && searchMatch;
-    });
+    // Load questions with server-side filtering
+    this.loadQuestions();
   }
 
   onSkillChange(): void {
@@ -102,16 +111,19 @@ export class QuestionsComponent implements OnInit {
   }
 
   paginatedQuestions(): Question[] {
-    const start = this.currentPage * this.pageSize;
-    return this.filteredQuestions.slice(start, start + this.pageSize);
+    return this.filteredQuestions;
   }
 
-  totalPagesArray(): number[] {
-    return Array(Math.ceil(this.filteredQuestions.length / this.pageSize)).fill(0);
+
+  changePage(page: number): void {
+    if (page !== this.currentPage) {
+      this.currentPage = page;
+      this.loadQuestions();
+    }
   }
 
   getVisiblePages(): number[] {
-    const totalPages = this.totalPagesArray().length;
+    const totalPages = this.totalPages;
     const current = this.currentPage;
     const pages: number[] = [];
 

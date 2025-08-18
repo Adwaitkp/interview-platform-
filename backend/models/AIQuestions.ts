@@ -9,7 +9,7 @@ export interface IAIQuestion extends Document {
   reviewStatus: 'pending' | 'approved' | 'rejected';
   source: string;
   assignedTo?: mongoose.Types.ObjectId;
-  
+  generatedBy: mongoose.Types.ObjectId;
   questionCount: number;
 }
 
@@ -31,6 +31,7 @@ const AIQuestionSchema = new Schema<IAIQuestion>({
   },
   source: { type: String, default: 'AI' },
   assignedTo: { type: Schema.Types.ObjectId, ref: 'User' },
+  generatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   questionCount: { type: Number, required: true } // Number of questions requested for this skill/level
 }, { timestamps: true });
 
@@ -40,4 +41,4 @@ AIQuestionSchema.index({ assignedTo: 1 });
 AIQuestionSchema.index({ skill: 1, level: 1 });
 AIQuestionSchema.index({ generatedBy: 1 });
 
-export const AIQuestions = mongoose.model<IAIQuestion>('AIQuestions', AIQuestionSchema); 
+export const AIQuestions = mongoose.model<IAIQuestion>('AIQuestions', AIQuestionSchema);

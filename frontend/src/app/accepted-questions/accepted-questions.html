@@ -6,10 +6,20 @@
 
   <!-- Search and Filters -->
   <div class="mb-4 flex gap-4">
-    <input [(ngModel)]="searchTerm" (input)="filterQuestions()" placeholder="Search questions..."
-      class="border p-2 rounded flex-1">
-    <input [(ngModel)]="candidateNameSearch" (input)="searchByCandidateName()" placeholder="Search by candidate name..."
-      class="border p-2 rounded flex-1">
+    <div class="flex flex-1">
+      <input [(ngModel)]="searchTerm" (keyup.enter)="filterQuestions()" placeholder="Search questions..."
+        class="border p-2 rounded-l flex-1">
+      <button (click)="filterQuestions()" class="ml-2 px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+        Search
+      </button>
+    </div>
+    <div class="flex flex-1">
+      <input [(ngModel)]="candidateNameSearch" (keyup.enter)="searchByCandidateName()" placeholder="Search by candidate name..."
+        class="border p-2 rounded-l flex-1">
+      <button (click)="searchByCandidateName()" class="ml-2 px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+        Search
+      </button>
+    </div>
     <select [(ngModel)]="selectedSkill" (change)="filterQuestions()" class="border p-2 rounded">
       <option value="">All Skills</option>
       <option *ngFor="let skill of skills" [value]="skill">{{skill}}</option>
@@ -45,7 +55,7 @@
         <td class="px-4 py-3">{{ q.level | titlecase }}</td>
         <td class="px-4 py-3">{{ q.question }}</td>
         <td class="px-4 py-3">{{ q.correctanswer }}</td>
-        <td class="px-4 py-3">{{ q.assignedTo?.name || 'Not Assigned' }}</td>
+        <td class="px-4 py-3">{{ q.assignedTo?.name || q.generatedBy?.name || 'Not Assigned' }}</td>
       </tr>
       <tr *ngIf="filteredQuestions.length === 0">
         <td colspan="5" class="px-4 py-6 text-center text-gray-500">No accepted questions found</td>
@@ -56,26 +66,26 @@
 
   <!-- Pagination Bar -->
   <div *ngIf="!loading && filteredQuestions.length > 0" class="mt-4 flex justify-center items-center gap-2">
-    <button (click)="currentPage = currentPage - 1" [disabled]="currentPage === 0"
+    <button (click)="changePage(currentPage - 1)" [disabled]="currentPage === 0"
       class="px-3 py-1 border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
       Prev
     </button>
-    <button *ngIf="totalPagesArray().length > 0" (click)="currentPage = 0"
+    <button *ngIf="totalPages > 0" (click)="changePage(0)"
       [class]="currentPage === 0 ? 'px-3 py-1 bg-blue-600 text-white rounded' : 'px-3 py-1 border rounded hover:bg-gray-100'">
       1
     </button>
     <span *ngIf="currentPage > 2" class="px-2">...</span>
-    <button *ngFor="let pageIndex of getVisiblePages()" (click)="currentPage = pageIndex"
+    <button *ngFor="let pageIndex of getVisiblePages()" (click)="changePage(pageIndex)"
       [class]="currentPage === pageIndex ? 'px-3 py-1 bg-blue-600 text-white rounded' : 'px-3 py-1 border rounded hover:bg-gray-100'">
       {{pageIndex + 1}}
     </button>
-    <span *ngIf="currentPage < totalPagesArray().length - 3" class="px-2">...</span>
-    <button *ngIf="totalPagesArray().length > 1 && currentPage !== totalPagesArray().length - 1"
-      (click)="currentPage = totalPagesArray().length - 1"
-      [class]="currentPage === totalPagesArray().length - 1 ? 'px-3 py-1 bg-blue-600 text-white rounded' : 'px-3 py-1 border rounded hover:bg-gray-100'">
-      {{totalPagesArray().length}}
+    <span *ngIf="currentPage < totalPages - 3" class="px-2">...</span>
+    <button *ngIf="totalPages > 1 && currentPage !== totalPages - 1"
+      (click)="changePage(totalPages - 1)"
+      [class]="currentPage === totalPages - 1 ? 'px-3 py-1 bg-blue-600 text-white rounded' : 'px-3 py-1 border rounded hover:bg-gray-100'">
+      {{totalPages}}
     </button>
-    <button (click)="currentPage = currentPage + 1" [disabled]="currentPage >= totalPagesArray().length - 1"
+    <button (click)="changePage(currentPage + 1)" [disabled]="currentPage >= totalPages - 1"
       class="px-3 py-1 border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
       Next
     </button>

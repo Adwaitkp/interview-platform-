@@ -68,13 +68,38 @@ router.post('/addinterviewee', isAdmin, async (req: CustomRequest, res: Response
   }
 });
 
-// Get all users (for admin dashboard)
+// Get all users (for admin dashboard) with pagination and search
 router.get('/users', isAdmin, async (req, res) => {
   try {
-    // Select all fields except password, including questionCounts
-    const users = await User.find().select('-password');
+    const page = parseInt(req.query.page as string) || 0;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const search = req.query.search as string || '';
+    
+    // Create search query
+    const searchQuery = search ? {
+      $or: [
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } }
+      ],
+      role: { $ne: 'admin' } // Exclude admin users
+    } : { role: { $ne: 'admin' } };
+    
+    // Get total count for pagination
+    const total = await User.countDocuments(searchQuery);
+    
+    // Get paginated users
+    const users = await User.find(searchQuery)
+      .select('-password')
+      .skip(page * limit)
+      .limit(limit)
+      .sort({ createdAt: -1 });
 
-    res.status(200).json(users);
+    res.status(200).json({
+      users,
+      totalPages: Math.ceil(total / limit),
+      currentPage: page,
+      totalUsers: total
+    });
   } catch (error) {
     console.error('❌ Error fetching users:', error);
     res.status(500).json({ message: 'Internal server error' });

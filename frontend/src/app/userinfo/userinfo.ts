@@ -20,7 +20,6 @@ export class Userinfo implements OnInit {
   skillSelections: { [userId: string]: { [skill: string]: boolean } } = {};
   levelSelections: { [userId: string]: { [level: string]: boolean } } = {};
   users: any[] = [];
-  searchItems: any[] = [];
   loading = true;
   showAddIntervieweeModal = false;
   showQuestionDetailsModal = false;
@@ -36,6 +35,9 @@ export class Userinfo implements OnInit {
   currentPage: number = 0;
   pageSize: number = 10;
   quizAssignmentLoading: { [userId: string]: boolean } = {};
+  totalPages: number = 0;
+  totalUsers: number = 0;
+  searchTerm: string = '';
 
   // AI Test Mode properties
   showAITestModal: boolean = false;
@@ -55,14 +57,15 @@ export class Userinfo implements OnInit {
   getAllUsers() {
     this.loading = true;
     const token = localStorage.getItem('token');
-    this.http.get(`${environment.apiUrl}/admin/users`, {
+    this.http.get(`${environment.apiUrl}/admin/users?page=${this.currentPage}&limit=${this.pageSize}&search=${this.searchTerm}`, {
       headers: new HttpHeaders({
         'Authorization': `Bearer ${token}`
       })
     }).subscribe({
       next: (res: any) => {
-        this.users = res.filter((user: any) => user.role !== 'admin');
-        this.searchItems = this.users;
+        this.users = res.users;
+        this.totalPages = res.totalPages;
+        this.totalUsers = res.totalUsers;
         this.loading = false;
       },
       error: (err) => {
@@ -73,10 +76,9 @@ export class Userinfo implements OnInit {
   }
 
   setSearch(term: string) {
-    this.searchItems = this.users.filter(user =>
-      user.name.toLowerCase().includes(term.toLowerCase()) ||
-      user.email.toLowerCase().includes(term.toLowerCase())
-    );
+    this.searchTerm = term;
+    this.currentPage = 0; // Reset to first page when searching
+    this.getAllUsers();
   }
 
   handleEditChange(userId: string, field: string, value: any) {
@@ -310,16 +312,12 @@ export class Userinfo implements OnInit {
   }
 
   get paginatedUsers(): any[] {
-    const start = this.currentPage * this.pageSize;
-    return this.searchItems.slice(start, start + this.pageSize);
+    return this.users;
   }
 
-  totalPagesArray(): number[] {
-    return Array(Math.ceil(this.searchItems.length / this.pageSize)).fill(0).map((x, i) => i);
-  }
 
   getVisiblePages(): number[] {
-    const total = this.totalPagesArray().length;
+    const total = this.totalPages;
     const maxVisible = 3;
     let start = Math.max(1, this.currentPage - 1);
     let end = Math.min(total - 2, this.currentPage + 1);
@@ -338,6 +336,13 @@ export class Userinfo implements OnInit {
     }
 
     return pages;
+  }
+  
+  changePage(page: number): void {
+    if (page !== this.currentPage) {
+      this.currentPage = page;
+      this.getAllUsers();
+    }
   }
 
   onSearchInput(event: Event): void {
@@ -483,7 +488,7 @@ export class Userinfo implements OnInit {
           const userIndex = this.users.findIndex(u => u._id === userId);
           if (userIndex !== -1) {
             this.users[userIndex].quizType = quizType;
-            this.searchItems = this.users;
+            // this.searchItems = this.users;
           }
           this.quizAssignmentLoading[userId] = false;
           resolve(res);

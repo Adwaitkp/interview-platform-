@@ -114,10 +114,33 @@ router.post('/submit', async (req: Request, res: Response) => {
   }
 });
 
-// Get all quiz results for admin dashboard
+// Get all quiz results for admin dashboard with pagination and search
 router.get('/results', isAdmin, async (req: Request, res: Response) => {
   try {
-    const results = await Result.find().sort({ createdAt: -1 });
+    const { page = '0', limit = '10', search = '' } = req.query;
+    
+    // Parse pagination parameters
+    const pageNum = parseInt(page as string, 10) || 0;
+    const limitNum = parseInt(limit as string, 10) || 10;
+    const searchTerm = search as string;
+    
+    // Build search filter
+    const filter: any = {};
+    if (searchTerm) {
+      filter.$or = [
+        { userName: { $regex: searchTerm, $options: 'i' } },
+        { userEmail: { $regex: searchTerm, $options: 'i' } }
+      ];
+    }
+    
+    // Get total count for pagination
+    const total = await Result.countDocuments(filter);
+    
+    // Get paginated results
+    const results = await Result.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(pageNum * limitNum)
+      .limit(limitNum);
     
     const formattedResults = results.map((result: any) => {
       const formatted = {
@@ -139,7 +162,12 @@ router.get('/results', isAdmin, async (req: Request, res: Response) => {
       return formatted;
     });
     
-    res.json(formattedResults);
+    res.json({
+      results: formattedResults,
+      totalPages: Math.ceil(total / limitNum),
+      currentPage: pageNum,
+      totalResults: total
+    });
   } catch (err) {
     console.error('❌ Error fetching results:', err);
     res.status(500).json({ message: 'Server error' });
