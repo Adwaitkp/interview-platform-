@@ -131,35 +131,42 @@
   </div>
 
   <!-- Question Details Modal (Always Centered) -->
-  <div *ngIf="selectedQuestion"
-    class="fixed inset-0 bg-black/20 bg-opacity-5 backdrop-blur flex items-center justify-center z-50">
-    <div class="bg-white p-6 rounded shadow-lg w-96 max-w-[30rem] mx-4">
-      <h2 class="text-lg font-bold mb-2">Question Details</h2>
-      <div class="mb-4 text-gray-800 font-medium">{{ selectedQuestion.question }}</div>
-      <h3 class="text-md font-semibold mb-2">Options</h3>
-      <ul class="mb-4 space-y-1">
-        <li class="py-1">
-          <span class="font-semibold">A:</span> {{ getOptionText(selectedQuestion, 'a') }}
-        </li>
-        <li class="py-1">
-          <span class="font-semibold">B:</span> {{ getOptionText(selectedQuestion, 'b') }}
-        </li>
-        <li class="py-1">
-          <span class="font-semibold">C:</span> {{ getOptionText(selectedQuestion, 'c') }}
-        </li>
-        <li class="py-1">
-          <span class="font-semibold">D:</span> {{ getOptionText(selectedQuestion, 'd') }}
-        </li>
-      </ul>
-      <div class="mb-4">
-        <span class="font-semibold">Correct Answer:</span> {{ selectedQuestion.correctanswer }}
-      </div>
-      <div class="flex justify-end">
-        <button (click)="closeQuestionDetails()"
-          class="py-2 px-4 bg-gray-300 text-gray-800 font-semibold rounded-md hover:bg-gray-400 transition">
-          Close
-        </button>
-      </div>
+ <div *ngIf="selectedQuestion"
+  class="fixed inset-0 bg-black/20 bg-opacity-5 backdrop-blur flex items-center justify-center z-50">
+  
+  <div class="bg-white p-6 rounded-2xl shadow-lg w-96 max-w-[30rem] mx-4 relative">
+    <!-- Close button (cross icon) -->
+    <button (click)="closeQuestionDetails()" 
+      class="absolute top-3 right-3 text-gray-400 hover:text-gray-600">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M6 18L18 6M6 6l12 12"></path>
+      </svg>
+    </button>
+
+    <h2 class="text-lg font-bold mb-2">Question Details</h2>
+    <div class="mb-4 text-gray-800 font-medium">{{ selectedQuestion.question }}</div>
+
+    <h3 class="text-md font-semibold mb-2">Options</h3>
+    <ul class="mb-4 space-y-1">
+      <li class="py-1">
+        <span class="font-semibold">A:</span> {{ getOptionText(selectedQuestion, 'a') }}
+      </li>
+      <li class="py-1">
+        <span class="font-semibold">B:</span> {{ getOptionText(selectedQuestion, 'b') }}
+      </li>
+      <li class="py-1">
+        <span class="font-semibold">C:</span> {{ getOptionText(selectedQuestion, 'c') }}
+      </li>
+      <li class="py-1">
+        <span class="font-semibold">D:</span> {{ getOptionText(selectedQuestion, 'd') }}
+      </li>
+    </ul>
+
+    <div class="mb-4">
+      <span class="font-semibold">Correct Answer:</span> {{ selectedQuestion.correctanswer }}
     </div>
   </div>
+</div>
+
 </div>

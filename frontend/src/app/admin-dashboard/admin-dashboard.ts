@@ -152,19 +152,26 @@ export class AdminDashboardComponent implements OnInit {
   }
 
   async loadUsers(): Promise<void> {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return;
 
-      const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
-      const users = await firstValueFrom(this.http.get<User[]>(`${environment.apiUrl}/admin/users`, { headers }));
-      
-      // keep only interviewees
-      this.users = users.filter(u => u.role !== 'admin');
-    } catch (error) {
-      console.error('Error loading users:', error);
-    }
+    const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
+    const response = await firstValueFrom(
+      this.http.get<any>(`${environment.apiUrl}/admin/users`, { headers })
+    );
+
+    // Make sure it's always an array
+    const users = Array.isArray(response) ? response : (response?.data || []);
+
+    // keep only interviewees
+    this.users = users.filter((u: any) => u.role !== 'admin');
+
+  } catch (error) {
+    console.error('Error loading users:', error);
   }
+}
+
 
   async loadResults(): Promise<void> {
     this.loading = true;
@@ -354,40 +361,62 @@ export class AdminDashboardComponent implements OnInit {
   }
 
   // AI Questions Modal methods
-  async viewAIQuestions(result: QuizResult, skill: string, level: string): Promise<void> {
-    try {
-      const token = localStorage.getItem('token');
-      const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
-      // Get all AI results and find the one for this user
-      const aiResults = await firstValueFrom(this.http.get<any[]>(`${environment.apiUrl}/ai-quiz/ai-results`, { headers }));
-      const userAIResult = aiResults.find((aiResult: any) => aiResult.email === result.email);
+async viewAIQuestions(result: QuizResult, skill: string, level: string): Promise<void> {
+  try {
+    const token = localStorage.getItem('token');
+    const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
 
-      if (userAIResult) {
-        // Fetch detailed AI result with question responses
-        const detailedAIResult = await firstValueFrom(this.http.get<any>(
-          `${environment.apiUrl}/ai-quiz/ai-result/${userAIResult._id}`,
-          { headers }
-        ));
+    // First, get all AI results to find the user's AI result
+    const response = await firstValueFrom(
+      this.http.get<any>(`${environment.apiUrl}/ai-quiz/ai-results?page=0&limit=1000`, { headers })
+    );
+    
+    // Handle both direct array response and paginated response
+    let aiResults: any[] = [];
+    if (Array.isArray(response)) {
+      aiResults = response;
+    } else if (response?.results && Array.isArray(response.results)) {
+      aiResults = response.results;
+    } else if (response?.data && Array.isArray(response.data)) {
+      aiResults = response.data;
+    }
 
-        if (detailedAIResult && detailedAIResult.questionResponses) {
-          // Filter questions by skill and level
-          this.selectedAIQuizQuestions = detailedAIResult.questionResponses.filter(
-            (q: any) => q.skill === skill && q.level === level
-          );
-        } else {
-          this.selectedAIQuizQuestions = [];
-        }
+    // Find result for this user
+    const userAIResult = aiResults.find((aiResult: any) => 
+      aiResult.email === result.email || aiResult.userEmail === result.email
+    );
+
+    if (userAIResult) {
+      // Fetch detailed AI result with question responses
+      const detailedAIResult = await firstValueFrom(
+        this.http.get<any>(`${environment.apiUrl}/ai-quiz/ai-result/${userAIResult._id}`, { headers })
+      );
+
+
+      if (detailedAIResult && detailedAIResult.questionResponses) {
+        // Filter questions by skill and level
+        this.selectedAIQuizQuestions = detailedAIResult.questionResponses.filter(
+          (q: any) => {
+           
+            return q.skill === skill && q.level === level;
+          }
+        );
       } else {
+        console.log('No question responses found in detailed result');
         this.selectedAIQuizQuestions = [];
       }
-
-      this.showAIQuizQuestionsModal = true;
-    } catch (error) {
-      console.error('Error fetching AI quiz results:', error);
+    } else {
+      console.log('No AI result found for this user');
       this.selectedAIQuizQuestions = [];
-      this.showAIQuizQuestionsModal = true;
     }
+
+    this.showAIQuizQuestionsModal = true;
+  } catch (error) {
+    console.error('Error fetching AI quiz results:', error);
+    this.selectedAIQuizQuestions = [];
+    this.showAIQuizQuestionsModal = true;
   }
+}
 
   closeAIQuizQuestionsModal(): void {
     this.showAIQuizQuestionsModal = false;

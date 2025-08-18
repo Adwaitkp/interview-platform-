@@ -6,8 +6,8 @@ import { environment } from '../../environments/environment';
 import { AddIntervieweeComponent } from '../add-interviewee/add-interviewee';
 
 @Component({
-  selector: 'app-userinfo',
-  templateUrl: './userinfo.html',
+  selector: 'app-candidate-management',
+  templateUrl: './candidate-management.html',
   standalone: true,
   imports: [CommonModule, FormsModule, AddIntervieweeComponent]
 })

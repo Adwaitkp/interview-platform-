@@ -25,8 +25,8 @@ export class HeaderComponent implements OnInit {
       case 'admin-dashboard':
         this.router.navigate(['/admin-dashboard']);
         break;
-      case 'userinfo':
-        this.router.navigate(['/userinfo']);
+      case 'candidate-management':
+        this.router.navigate(['/candidate-management']);
         break;
       case 'questions':
         this.router.navigate(['/questions']);

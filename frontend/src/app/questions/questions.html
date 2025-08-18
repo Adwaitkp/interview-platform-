@@ -9,7 +9,8 @@
     <div class="flex flex-1">
       <input [(ngModel)]="searchTerm" (keyup.enter)="filterQuestions()" placeholder="Search questions..."
         class="border p-2 rounded-l flex-1">
-      <button (click)="filterQuestions()" class="ml-2 px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+      <button (click)="filterQuestions()"
+        class="ml-2 px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
         Search
       </button>
     </div>
@@ -107,8 +108,7 @@
     <span *ngIf="currentPage < totalPages - 3" class="px-2">...</span>
 
     <!-- Last Page -->
-    <button *ngIf="totalPages > 1 && currentPage !== totalPages - 1"
-      (click)="changePage(totalPages - 1)"
+    <button *ngIf="totalPages > 1 && currentPage !== totalPages - 1" (click)="changePage(totalPages - 1)"
       [class]="currentPage === totalPages - 1 ? 'px-3 py-1 bg-blue-600 text-white rounded' : 'px-3 py-1 border rounded hover:bg-gray-100'">
       {{totalPages}}
     </button>
@@ -121,28 +121,35 @@
   </div>
 
   <!-- Options Modal (Always Centered) -->
-  <div *ngIf="showOptionsModal"
-    class="fixed inset-0 bg-black/20 bg-opacity-5 backdrop-blur flex items-center justify-center z-50">
-    <div class="bg-white p-6 rounded shadow-lg w-96 max-w-[30rem] mx-4">
-      <h2 class="text-lg font-bold mb-2">Question Details</h2>
-      <div class="mb-4 text-gray-800 font-medium">{{ optionsQuestionText }}</div>
-      <h3 class="text-md font-semibold mb-2">Options</h3>
-      <ul class="mb-4 space-y-1">
-        <li *ngFor="let opt of optionsToShow" class="py-1">
-          <span class="font-semibold">{{ opt.key }}:</span> {{ opt.value }}
-        </li>
-      </ul>
-      <div class="mb-4">
-        <span class="font-semibold">Correct Answer:</span> {{ optionsCorrectAnswer }}
-      </div>
-      <div class="flex justify-end">
-        <button (click)="closeOptionsModal()"
-          class="py-2 px-4 bg-gray-300 text-gray-800 font-semibold rounded-md hover:bg-gray-400 transition">
-          Close
-        </button>
-      </div>
+ <div *ngIf="showOptionsModal"
+  class="fixed inset-0 bg-black/20 bg-opacity-5 backdrop-blur flex items-center justify-center z-50">
+  <div class="bg-white p-6 rounded-2xl shadow-lg w-96 max-w-[30rem] mx-4 relative">
+    
+    <!-- Close button at top-right -->
+    <button (click)="closeOptionsModal()" 
+      class="absolute top-3 right-3 text-gray-400 hover:text-gray-600">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M6 18L18 6M6 6l12 12"></path>
+      </svg>
+    </button>
+
+    <h2 class="text-lg font-bold mb-2">Question Details</h2>
+    <div class="mb-4 text-gray-800 font-medium">{{ optionsQuestionText }}</div>
+
+    <h3 class="text-md font-semibold mb-2">Options</h3>
+    <ul class="mb-4 space-y-1">
+      <li *ngFor="let opt of optionsToShow" class="py-1">
+        <span class="font-semibold">{{ opt.key }}:</span> {{ opt.value }}
+      </li>
+    </ul>
+
+    <div class="mb-4">
+      <span class="font-semibold">Correct Answer:</span> {{ optionsCorrectAnswer }}
     </div>
   </div>
+</div>
+
 
   <!-- Delete Confirmation Modal -->
   <div *ngIf="deleteQuestionId" class="custom-dialog">
