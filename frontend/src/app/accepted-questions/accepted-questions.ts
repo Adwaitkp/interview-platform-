@@ -46,8 +46,10 @@ export class AcceptedQuestionsComponent implements OnInit {
   selectedLevel = '';
   selectedQuestion: Question | null = null;
   
-  skills: string[] = [];
-  levels: string[] = [];
+  skills: string[] = ['Node.js', 'React', 'Angular', 'MongoDB', 'PostgreSQL', 'Next.js', 'Django', 'Git', 'Docker', 'TypeScript'];
+
+  levels: string[] = ['beginner', 'intermediate', 'advanced'];
+
 
   currentPage: number = 0;
   pageSize: number = 10;
@@ -90,9 +92,9 @@ export class AcceptedQuestionsComponent implements OnInit {
       this.totalPages = response.totalPages;
       this.currentPage = response.currentPage;
       
-      if (!this.skills.length || !this.levels.length) {
-        this.extractSkillsAndLevels();
-      }
+      // if (!this.skills.length || !this.levels.length) {
+      //   this.extractSkillsAndLevels();
+      // }
     } catch (error) {
       console.error('Error loading accepted questions:', error);
     } finally {
@@ -144,18 +146,18 @@ export class AcceptedQuestionsComponent implements OnInit {
     }
   }
 
-  extractSkillsAndLevels(): void {
-    const skillSet = new Set<string>();
-    const levelSet = new Set<string>();
+  // extractSkillsAndLevels(): void {
+  //   const skillSet = new Set<string>();
+  //   //const levelSet = new Set<string>();
 
-    this.questions.forEach(question => {
-      skillSet.add(question.skill);
-      levelSet.add(question.level);
-    });
+  //   this.questions.forEach(question => {
+  //     skillSet.add(question.skill);
+  //     //levelSet.add(question.level);
+  //   });
 
-    this.skills = Array.from(skillSet).sort();
-    this.levels = Array.from(levelSet).sort();
-  }
+  //   this.skills = Array.from(skillSet).sort();
+  //   //this.levels = Array.from(levelSet).sort();
+  // }
 
   filterQuestions(): void {
     // Reset to first page when filtering

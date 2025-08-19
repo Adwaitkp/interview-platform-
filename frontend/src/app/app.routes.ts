@@ -2,7 +2,7 @@ import { Routes } from '@angular/router';
 import { Login } from './login/login';
 import { AdminDashboardComponent } from './admin-dashboard/admin-dashboard';
 import { HeaderComponent } from './header/header';
-import { Userinfo } from './candidate-management/candidate-management'
+import { CandidateManagement } from './candidate-management/candidate-management'
 import { QuestionsComponent } from './questions/questions';
 import { QuizComponent } from './quiz/quiz';
 import { AIQuestionsComponent } from './ai-questions/ai-questions';
@@ -19,7 +19,7 @@ export const routes: Routes = [
   { path: 'admin-dashboard', component: AdminDashboardComponent },
 
   // User info page
-  { path: 'candidate-management', component: Userinfo },
+  { path: 'candidate-management', component: CandidateManagement },
 
   {path : 'header', component: HeaderComponent},
 

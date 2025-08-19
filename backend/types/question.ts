@@ -5,4 +5,4 @@ export interface IQuestion {
   level: string;
   options: { a: string; b: string; c: string; d: string };
   correctanswer: string;
-} 
+}

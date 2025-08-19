@@ -11,6 +11,7 @@ export interface IAIQuestion extends Document {
   assignedTo?: mongoose.Types.ObjectId;
   generatedBy: mongoose.Types.ObjectId;
   questionCount: number;
+  setid: string;
 }
 
 const AIQuestionSchema = new Schema<IAIQuestion>({
@@ -32,7 +33,8 @@ const AIQuestionSchema = new Schema<IAIQuestion>({
   source: { type: String, default: 'AI' },
   assignedTo: { type: Schema.Types.ObjectId, ref: 'User' },
   generatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  questionCount: { type: Number, required: true } // Number of questions requested for this skill/level
+  questionCount: { type: Number, required: true },
+  setid: { type: String, required: true }
 }, { timestamps: true });
 
 // Indexes for better query performance

@@ -35,7 +35,8 @@ export class QuestionsComponent implements OnInit {
   pageSize: number = 10;
   totalPages: number = 0;
 
-  skills: string[] = [];
+ skills: string[] = ['Node.js', 'React', 'Angular', 'MongoDB', 'PostgreSQL', 'Next.js', 'Django', 'Git', 'Docker', 'TypeScript'];
+
   levels = ['beginner', 'intermediate', 'advanced'];
   predefinedSkills: string[] = ['Node.js', 'React', 'Angular', 'MongoDB', 'PostgreSQL', 'Next.js', 'Django', 'Git', 'Docker', 'TypeScript'];
 
@@ -80,7 +81,7 @@ export class QuestionsComponent implements OnInit {
         this.filteredQuestions = response.questions;
         this.currentPage = response.currentPage;
         this.totalPages = response.totalPages;
-        this.extractSkills();
+        // this.extractSkills();
         this.loading = false;
       },
       error: (error) => {
@@ -90,10 +91,10 @@ export class QuestionsComponent implements OnInit {
     });
   }
 
-  extractSkills(): void {
-    const skillSet = new Set(this.allQuestions.map(q => q.skill));
-    this.skills = Array.from(skillSet).sort();
-  }
+  // extractSkills(): void {
+  //   const skillSet = new Set(this.allQuestions.map(q => q.skill));
+  //   this.skills = Array.from(skillSet).sort();
+  // }
 
   filterQuestions(): void {
     // Reset to first page when filtering

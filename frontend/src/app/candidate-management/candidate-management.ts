@@ -11,10 +11,10 @@ import { AddIntervieweeComponent } from '../add-interviewee/add-interviewee';
   standalone: true,
   imports: [CommonModule, FormsModule, AddIntervieweeComponent]
 })
-export class Userinfo implements OnInit {
+export class CandidateManagement implements OnInit {
   // ADD THIS LINE - Expose Math to template
   Math = Math;
-  
+
   availableSkills: string[] = ['Node.js', 'React', 'Angular', 'MongoDB', 'PostgreSQL', 'Next.js', 'Django', 'Git', 'Docker', 'TypeScript'];
   availableLevels: string[] = ['Beginner', 'Intermediate', 'Advanced'];
   skillSelections: { [userId: string]: { [skill: string]: boolean } } = {};
@@ -48,7 +48,12 @@ export class Userinfo implements OnInit {
   // Success modal property
   showSuccessModal: boolean = false;
 
-  constructor(private http: HttpClient, private cdr: ChangeDetectorRef) {}
+  availableSetIds: string[] = [];
+  selectedSetId: string = '';
+  showSetChoiceModal: boolean = false;
+  useExistingSet: boolean = false;
+
+  constructor(private http: HttpClient, private cdr: ChangeDetectorRef) { }
 
   ngOnInit(): void {
     this.getAllUsers();
@@ -337,7 +342,7 @@ export class Userinfo implements OnInit {
 
     return pages;
   }
-  
+
   changePage(page: number): void {
     if (page !== this.currentPage) {
       this.currentPage = page;
@@ -406,11 +411,11 @@ export class Userinfo implements OnInit {
     if (!this.selectedUser || !this.selectedUser.level) {
       return false;
     }
-    
-    const userLevels = Array.isArray(this.selectedUser.level) 
-      ? this.selectedUser.level 
+
+    const userLevels = Array.isArray(this.selectedUser.level)
+      ? this.selectedUser.level
       : [this.selectedUser.level];
-    
+
     return userLevels.includes(level);
   }
 
@@ -506,22 +511,45 @@ export class Userinfo implements OnInit {
     if (!user.quizType) return 'Not Assigned';
     return user.quizType === 'normal' ? 'Normal Quiz' : 'AI Quiz';
   }
-
   async openAITestMode(user: any): Promise<void> {
     this.selectedUserForAI = user;
     this.skillLevels = [];
+    this.availableSetIds = [];
+    this.selectedSetId = '';
+    this.showSetChoiceModal = false;
+    this.useExistingSet = false;
 
     const userSkills = Array.isArray(user.skill) ? user.skill : (user.skill ? [user.skill] : []);
     const userLevels = Array.isArray(user.level) ? user.level : (user.level ? [user.level] : []);
 
+    // Check for existing sets
+    if (user && user._id) {
+      const token = localStorage.getItem('token');
+      const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
+      try {
+        const res: any = await this.http.get(`${environment.apiUrl}/ai-quiz/user-sets/${user._id}`, { headers }).toPromise();
+        this.availableSetIds = res.sets || [];
+
+        // If sets exist, show choice modal
+        if (this.availableSetIds.length > 0) {
+          this.showSetChoiceModal = true;
+          return; // Wait for admin choice
+        }
+      } catch (err) {
+        console.error('Error checking existing sets:', err);
+      }
+    }
+
+    this.initializeSkillLevelsAndShowModal(userSkills, userLevels);
+  }
+  // Helper method to initialize skill levels and show modal
+  private initializeSkillLevelsAndShowModal(userSkills: string[], userLevels: string[]): void {
+    this.skillLevels = [];
+
     if (userSkills.length > 0 && userLevels.length > 0) {
       userSkills.forEach((skill: string) => {
         userLevels.forEach((level: string) => {
-          this.skillLevels.push({
-            skill: skill,
-            level: level,
-            count: 1
-          });
+          this.skillLevels.push({ skill, level, count: 1 });
         });
       });
     }
@@ -532,12 +560,48 @@ export class Userinfo implements OnInit {
 
     this.showAITestModal = true;
   }
+  continueWithSet() {
+    this.useExistingSet = true;
+    this.showSetChoiceModal = false;
 
+    // Initialize skillLevels for the AI Test Modal
+    const userSkills = Array.isArray(this.selectedUserForAI.skill)
+      ? this.selectedUserForAI.skill
+      : (this.selectedUserForAI.skill ? [this.selectedUserForAI.skill] : []);
+    const userLevels = Array.isArray(this.selectedUserForAI.level)
+      ? this.selectedUserForAI.level
+      : (this.selectedUserForAI.level ? [this.selectedUserForAI.level] : []);
+
+    this.initializeSkillLevelsAndShowModal(userSkills, userLevels);
+  }
+  createNewSet() {
+    this.useExistingSet = false;
+    this.selectedSetId = '';
+    this.showSetChoiceModal = false;
+
+    // Initialize skillLevels for the AI Test Modal
+    const userSkills = Array.isArray(this.selectedUserForAI.skill)
+      ? this.selectedUserForAI.skill
+      : (this.selectedUserForAI.skill ? [this.selectedUserForAI.skill] : []);
+    const userLevels = Array.isArray(this.selectedUserForAI.level)
+      ? this.selectedUserForAI.level
+      : (this.selectedUserForAI.level ? [this.selectedUserForAI.level] : []);
+
+    this.initializeSkillLevelsAndShowModal(userSkills, userLevels);
+  }
   closeAITestModal(): void {
     this.showAITestModal = false;
     this.selectedUserForAI = null;
     this.skillLevels = [];
   }
+
+  closeSetChoiceModal() {
+  this.showSetChoiceModal = false;
+  this.selectedUserForAI = null;
+  this.availableSetIds = [];
+  this.selectedSetId = '';
+  this.useExistingSet = false;
+}
 
   addSkillLevel(): void {
     this.skillLevels.push({ skill: '', level: '', count: 1 });
@@ -554,49 +618,47 @@ export class Userinfo implements OnInit {
   }
 
   // MAIN FIX: generateAIQuestions method - GUARANTEED TO WORK
-async generateAIQuestions(): Promise<void> {
-  if (!this.isAITestFormValid() || !this.selectedUserForAI) {
-    return;
+  async generateAIQuestions(): Promise<void> {
+    if (!this.isAITestFormValid() || !this.selectedUserForAI) {
+      return;
+    }
+    this.isGeneratingAIQuestions = true;
+    try {
+      const token = localStorage.getItem('token');
+      const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
+      const payload: any = {
+        skillLevels: this.skillLevels,
+        generatedBy: this.selectedUserForAI._id,
+        useExistingSet: this.useExistingSet
+      };
+      if (this.useExistingSet && this.selectedSetId) {
+        payload.setid = this.selectedSetId;
+      }
+      await this.http.post(`${environment.apiUrl}/ai-quiz/generate-ai-questions`, payload, { headers }).toPromise();
+      await this.assignQuizType(this.selectedUserForAI._id, 'ai');
+      this.showAITestModal = false;
+      this.selectedUserForAI = null;
+      this.skillLevels = [];
+      this.isGeneratingAIQuestions = false;
+      this.cdr.detectChanges();
+      this.showSuccessModal = true;
+      this.cdr.detectChanges();
+      this.getAllUsers();
+    } catch (error) {
+      this.isGeneratingAIQuestions = false;
+      this.cdr.detectChanges();
+      alert('Failed to generate AI questions. Please try again.');
+    }
   }
 
-  this.isGeneratingAIQuestions = true;
 
-  try {
-    const token = localStorage.getItem('token');
-    const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
-    const payload = {
-      skillLevels: this.skillLevels,
-      generatedBy: this.selectedUserForAI._id
-    };
+  // handleSuccessModalAction method
+  handleSuccessModalAction(shouldRedirect: boolean): void {
+    this.showSuccessModal = false;
 
-    await this.http.post(`${environment.apiUrl}/ai-quiz/generate-ai-questions`, payload, { headers }).toPromise();
-    await this.assignQuizType(this.selectedUserForAI._id, 'ai');
-
-    this.showAITestModal = false;
-    this.selectedUserForAI = null;
-    this.skillLevels = [];
-    this.isGeneratingAIQuestions = false;
-    this.cdr.detectChanges();
-
-    this.showSuccessModal = true;
-    this.cdr.detectChanges();
-
-    this.getAllUsers();
-
-  } catch (error) {
-    this.isGeneratingAIQuestions = false;
-    this.cdr.detectChanges();
-    alert('Failed to generate AI questions. Please try again.');
+    if (shouldRedirect) {
+      window.location.href = '/ai-questions';
+    }
   }
-}
-
-// handleSuccessModalAction method
-handleSuccessModalAction(shouldRedirect: boolean): void {
-  this.showSuccessModal = false;
-
-  if (shouldRedirect) {
-    window.location.href = '/ai-questions';
-  }
-}
 
 }

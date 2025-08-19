@@ -19,14 +19,30 @@
       </button>
     </div>
 
-    <!-- Add Interviewee Button -->
+
     <button (click)="showAddIntervieweeModal = true"
       class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
       <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
       </svg>
-      Add Interviewee
+      Add Candidate
     </button>
+
+    <div *ngIf="showAddIntervieweeModal" class="custom-dialog" (click)="closeAddIntervieweeModal()">
+
+      <!-- Center wrapper -->
+      <div class="flex items-center justify-center min-h-full py-4">
+        <div class="bg-white rounded-md shadow-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-hidden"
+          (click)="$event.stopPropagation()">
+          <div class="p-6 overflow-y-auto max-h-[90vh]">
+            <app-add-interviewee (onSuccess)="onIntervieweeAdded()" (onCancel)="closeAddIntervieweeModal()">
+            </app-add-interviewee>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
   </div>
   <!-- Loading State -->
   <div *ngIf="loading" class="bg-white rounded-lg shadow-sm border border-gray-200 p-12">
@@ -309,8 +325,7 @@
       {{pageIndex + 1}}
     </button>
     <span *ngIf="currentPage < totalPages - 3" class="px-2">...</span>
-    <button *ngIf="totalPages > 1 && currentPage !== totalPages - 1"
-      (click)="changePage(totalPages - 1)"
+    <button *ngIf="totalPages > 1 && currentPage !== totalPages - 1" (click)="changePage(totalPages - 1)"
       [class]="currentPage === totalPages - 1 ? 'px-3 py-1 bg-blue-600 text-white rounded' : 'px-3 py-1 border rounded hover:bg-gray-100'">
       {{totalPages}}
     </button>
@@ -453,10 +468,46 @@
   </div>
 
   <!-- Add Interviewee Modal -->
-  <div *ngIf="showAddIntervieweeModal" class="custom-dialog">
-    <div class="relative top-25 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
-      <app-add-interviewee (onCancel)="closeAddIntervieweeModal()" (onSuccess)="onIntervieweeAdded()">
-      </app-add-interviewee>
+  <!-- AI Quiz Set Choice Modal -->
+  <div *ngIf="showSetChoiceModal" class="custom-dialog">
+    <div class="relative top-45 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+      <!-- Close button in top right -->
+      <div class="flex justify-end mb-2">
+        <button (click)="closeSetChoiceModal()" class="text-gray-500 hover:text-gray-700">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+
+      <div class="-mt-9">
+        <h3 class="text-lg font-medium text-black ">Existing Sets Found</h3>
+        <p class="text-sm text-gray-500 text-center mt-2 mb-4">
+          found an existing question setId for {{ selectedUserForAI?.name }}. Choose an option:
+        </p>
+
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-2">Select existing set:</label>
+          <select [(ngModel)]="selectedSetId"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            <option value="" disabled>Choose a set...</option>
+            <option *ngFor="let setId of availableSetIds; let i = index" [value]="setId">
+              Set {{ i + 1 }}
+            </option>
+          </select>
+        </div>
+
+        <div class="flex gap-3 justify-end mt-6">
+          <button (click)="continueWithSet()" [disabled]="!selectedSetId"
+            class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+            Selected Set
+          </button>
+          <button (click)="createNewSet()"
+            class="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors duration-200">
+            New Set
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -465,7 +516,6 @@
     <div class="relative w-11/12 max-w-2xl bg-white rounded-2xl shadow-lg overflow-hidden">
 
       <!-- Title bar fixed -->
-      <!-- Title bar -->
       <div class="sticky top-0 bg-white z-10 p-5 flex justify-between items-center">
         <h3 class="text-xl font-medium text-gray-900">
           AI Test Mode - {{ selectedUserForAI?.name }}

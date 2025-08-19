@@ -35,14 +35,14 @@ export class AddIntervieweeComponent implements AfterViewInit {
   levelOptions: string[] = [
     'Beginner', 'Intermediate', 'Advanced'
   ];
-  
+
   get availableSkills(): string[] {
     return this.skillOptions;
   }
 
   @ViewChild('skillDropdown') skillDropdownRef!: ElementRef;
   @ViewChild('levelDropdown') levelDropdownRef!: ElementRef;
-  
+
   constructor(private fb: FormBuilder, private http: HttpClient, private elementRef: ElementRef) {
     this.form = this.fb.group({
       name: ['', Validators.required],
@@ -52,7 +52,7 @@ export class AddIntervieweeComponent implements AfterViewInit {
       skill: [[], Validators.required], // Multi-select field
       level: [[], Validators.required] // Change to multi-select
     }, { validators: this.passwordsMatchValidator });
-    
+
     // Initialize selectedSkills from form value
     this.form.get('skill')?.valueChanges.subscribe(values => {
       this.selectedSkills = values || [];
@@ -85,28 +85,39 @@ export class AddIntervieweeComponent implements AfterViewInit {
   toggleShowConfirmPassword() {
     this.showConfirmPassword = !this.showConfirmPassword;
   }
-  
-  toggleSkillDropdown() {
+
+  toggleSkillDropdown(event?: MouseEvent) {
+    if (event) {
+      event.stopPropagation();
+    }
     this.showSkillDropdown = !this.showSkillDropdown;
+    this.showLevelDropdown = false;
   }
-  
+
   closeSkillDropdown() {
     this.showSkillDropdown = false;
   }
 
-  toggleLevelDropdown() {
+  toggleLevelDropdown(event?: MouseEvent) {
+    if (event) {
+      event.stopPropagation();
+    }
     this.showLevelDropdown = !this.showLevelDropdown;
+    this.showSkillDropdown = false;
   }
 
   closeLevelDropdown() {
     this.showLevelDropdown = false;
   }
-  
+  closeAllDropdowns() {
+    this.showSkillDropdown = false;
+    this.showLevelDropdown = false;
+  }
   // Initialize after view is ready
   ngAfterViewInit() {
-   
+
   }
-  
+
   // Listen for clicks on the document
   @HostListener('document:click', ['$event'])
   handleClickOutside(event: MouseEvent) {
@@ -125,43 +136,46 @@ export class AddIntervieweeComponent implements AfterViewInit {
       }
     }
   }
-  
+
   toggleSkillSelection(skill: string, event: MouseEvent) {
     // Prevent default behavior (context menu for right-click)
     event.preventDefault();
-    
+    event.stopPropagation();
+
     const currentSkills = [...this.selectedSkills];
     const index = currentSkills.indexOf(skill);
-    
+
     if (index === -1) {
       currentSkills.push(skill);
     } else {
       currentSkills.splice(index, 1);
     }
-    
+
     this.selectedSkills = currentSkills;
     this.form.get('skill')?.setValue(currentSkills);
     return false; // Prevent default context menu
   }
-  
+
   removeSkill(skill: string, event: MouseEvent) {
     event.stopPropagation(); // Prevent dropdown from opening
     const currentSkills = [...this.selectedSkills];
     const index = currentSkills.indexOf(skill);
-    
+
     if (index !== -1) {
       currentSkills.splice(index, 1);
       this.selectedSkills = currentSkills;
       this.form.get('skill')?.setValue(currentSkills);
     }
   }
-  
+
   isSkillSelected(skill: string): boolean {
     return this.selectedSkills.includes(skill);
   }
 
   toggleLevelSelection(level: string, event: MouseEvent) {
     event.preventDefault();
+    event.stopPropagation();
+
     const currentLevels = [...this.selectedLevels];
     const index = currentLevels.indexOf(level);
     if (index === -1) {

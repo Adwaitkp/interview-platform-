@@ -40,15 +40,16 @@ export class AIQuestionsComponent implements OnInit {
   skillFilter: string = '';
   levelFilter: string = '';
   searchTerm: string = ''; // Added searchTerm property
-  availableSkills: string[] = [];
-  availableLevels: string[] = [];
+  availableSkills: string[] = ['Node.js', 'React', 'Angular', 'MongoDB', 'PostgreSQL', 'Next.js', 'Django', 'Git', 'Docker', 'TypeScript'];
+
+  availableLevels: string[] = ['beginner', 'intermediate', 'advanced'];
   processingQuestions: Set<string> = new Set();
   selectedQuestion: AIQuestion | null = null;
   isBulkProcessing: boolean = false;
   deleteQuestionId: string | null = null;
   showApproveAllModal: boolean = false;
 
-  constructor(private http: HttpClient, private router: Router) {}
+  constructor(private http: HttpClient, private router: Router) { }
 
   ngOnInit(): void {
     this.loadQuestions();
@@ -56,7 +57,7 @@ export class AIQuestionsComponent implements OnInit {
 
   async loadQuestions(): Promise<void> {
     this.loading = true;
-    
+
     try {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -65,7 +66,7 @@ export class AIQuestionsComponent implements OnInit {
       }
 
       const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
-      
+
       // Build query parameters - exclude approved questions by default
       const params: any = {};
       if (this.statusFilter) {
@@ -76,26 +77,28 @@ export class AIQuestionsComponent implements OnInit {
       }
       if (this.skillFilter) params.skill = this.skillFilter;
       if (this.levelFilter) params.level = this.levelFilter;
+      if (this.searchTerm.trim()) params.search = this.searchTerm;
+
 
       const queryString = Object.keys(params)
         .map(key => `${key}=${encodeURIComponent(params[key])}`)
         .join('&');
 
       const url = `${environment.apiUrl}/ai-quiz/all-ai-questions${queryString ? '?' + queryString : ''}`;
-      
+
       const questions = await firstValueFrom(
         this.http.get<AIQuestion[]>(url, { headers })
       );
 
       this.allQuestions = questions; // Store all questions
-      this.filterQuestions(); // Apply any existing filters
-      
+      this.questions = questions; // Apply any existing filters
+
       // Extract unique skills and levels for filter dropdowns
-      const skills = new Set(questions.map(q => q.skill));
-      this.availableSkills = Array.from(skills).sort();
-      
-      const levels = new Set(questions.map(q => q.level));
-      this.availableLevels = Array.from(levels).sort();
+      // const skills = new Set(questions.map(q => q.skill));
+      // this.availableSkills = Array.from(skills).sort();
+
+      // const levels = new Set(questions.map(q => q.level));
+      // this.availableLevels = Array.from(levels).sort();
 
     } catch (error) {
       console.error('Error loading AI questions:', error);
@@ -106,20 +109,10 @@ export class AIQuestionsComponent implements OnInit {
 
   // Added filterQuestions method
   filterQuestions(): void {
-    let filtered = [...this.allQuestions];
-
-    // Apply search filter
-    if (this.searchTerm.trim()) {
-      const searchLower = this.searchTerm.toLowerCase();
-      filtered = filtered.filter(q => 
-        q.question.toLowerCase().includes(searchLower) ||
-        q.skill.toLowerCase().includes(searchLower) ||
-        q.level.toLowerCase().includes(searchLower) ||
-        q.correctanswer.toLowerCase().includes(searchLower)
-      );
-    }
-
-    this.questions = filtered;
+    this.loadQuestions();
+  }
+  onSearch(): void {
+    this.loadQuestions();
   }
 
   showApproveAllConfirmation(): void {
@@ -128,11 +121,11 @@ export class AIQuestionsComponent implements OnInit {
 
   async approveQuestion(questionId: string): Promise<void> {
     this.processingQuestions.add(questionId);
-    
+
     try {
       const token = localStorage.getItem('token');
       const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
-      
+
       // Get the question
       const question = this.questions.find(q => q._id === questionId);
       if (!question) {
@@ -143,11 +136,11 @@ export class AIQuestionsComponent implements OnInit {
       const assignTo = question.assignedTo || question.generatedBy;
 
       await firstValueFrom(
-        this.http.post(`${environment.apiUrl}/ai-quiz/approve-ai-question`, 
-          { 
+        this.http.post(`${environment.apiUrl}/ai-quiz/approve-ai-question`,
+          {
             questionId,
             assignedTo: assignTo // Use existing assignment or fall back to generatedBy
-          }, 
+          },
           { headers }
         )
       );
@@ -176,11 +169,11 @@ export class AIQuestionsComponent implements OnInit {
     if (!this.deleteQuestionId) return;
 
     this.processingQuestions.add(this.deleteQuestionId);
-    
+
     try {
       const token = localStorage.getItem('token');
       const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
-      
+
       await firstValueFrom(
         this.http.delete(`${environment.apiUrl}/ai-quiz/delete-ai-question/${this.deleteQuestionId}`, { headers })
       );
@@ -202,20 +195,20 @@ export class AIQuestionsComponent implements OnInit {
 
   async approveAllQuestions(): Promise<void> {
     this.isBulkProcessing = true;
-    
+
     try {
       const token = localStorage.getItem('token');
       const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
-      
+
       // Create an array of promises for all approval requests
       const approvalPromises = this.questions.map(async (question) => {
         try {
           await firstValueFrom(
-            this.http.post(`${environment.apiUrl}/ai-quiz/approve-ai-question`, 
-              { 
+            this.http.post(`${environment.apiUrl}/ai-quiz/approve-ai-question`,
+              {
                 questionId: question._id,
                 assignedTo: question.generatedBy
-              }, 
+              },
               { headers }
             )
           );
@@ -228,15 +221,15 @@ export class AIQuestionsComponent implements OnInit {
 
       // Wait for all approvals to complete
       const results = await Promise.all(approvalPromises);
-      
+
       // Count successes and failures
       const successful = results.filter(r => r.success).length;
       const failed = results.filter(r => !r.success).length;
-      
+
       // Clear all questions from both arrays since they should no longer appear
       this.questions = [];
       this.allQuestions = [];
-      
+
       // Show results to user
       // if (failed === 0) {
       //   alert(`Successfully approved all ${successful} questions!`);
