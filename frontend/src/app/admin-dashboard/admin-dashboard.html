@@ -18,101 +18,102 @@
   </div>
 
 
-<!-- Loading -->
-<div *ngIf="loading" class="bg-white rounded-lg shadow-sm border border-gray-200 p-12">
-  <div class="flex items-center justify-center">
-    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-    <span class="ml-3 text-gray-600">Loading users...</span>
+  <!-- Loading -->
+  <div *ngIf="loading" class="bg-white rounded-lg shadow-sm border border-gray-200 p-12">
+    <div class="flex items-center justify-center">
+      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <span class="ml-3 text-gray-600">Loading users...</span>
+    </div>
   </div>
-</div>
 
-<!-- Table (hidden while loading) -->
-<div *ngIf="!loading" class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-  <div class="overflow-x-auto">
-    <table class="min-w-full divide-y divide-gray-200">
-      <thead class="bg-gray-100">
-        <tr>
-          <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Name</th>
-          <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Email</th>
-          <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Score</th>
-          <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">AI Score</th>
-          <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
-          <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Result date</th>
-        </tr>
-      </thead>
+  <!-- Table (hidden while loading) -->
+  <div *ngIf="!loading" class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-100">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Name</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Email</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Score</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">AI Score</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Result date
+            </th>
+          </tr>
+        </thead>
 
-      <!-- Results list -->
-      <tbody class="bg-white divide-y divide-gray-200" *ngIf="paginatedResults.length > 0">
-        <tr *ngFor="let result of paginatedResults">
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ result.name }}</td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ result.email }}</td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm">
-            <button *ngIf="result.totalQuestions > 0" (click)="showSkillDetails(result)"
-              class="cursor-pointer hover:underline"
-              [class]="result.overallPercentage >= 70 ? 'text-green-600' : result.overallPercentage >= 50 ? 'text-yellow-600' : 'text-red-600'">
-              {{ result.totalMarks }}/{{ result.totalQuestions }}
-              <span *ngIf="!result.skillResults || result.skillResults.length === 0"
-                class="text-xs text-purple-600 ml-1">(AI)</span>
-            </button>
-            <span *ngIf="result.totalQuestions === 0" class="text-gray-400">-</span>
-          </td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm">
-            <button *ngIf="result.aiScore" (click)="showAISkillDetails(result)" class="cursor-pointer hover:underline"
-              [class]="result.aiScore.overallPercentage >= 70 ? 'text-green-600' : result.aiScore.overallPercentage >= 50 ? 'text-yellow-600' : 'text-red-600'">
-              {{ result.aiScore.totalMarks }}/{{ result.aiScore.totalQuestions }}
-            </button>
-            <span *ngIf="!result.aiScore" class="text-gray-400">-</span>
-          </td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-            <button class="text-orange-600 hover:text-orange-800 disabled:opacity-50 disabled:cursor-not-allowed mr-2"
-              (click)="resetQuiz(result)" [disabled]="isResettingQuiz(result.userId || '')">
-              {{ isResettingQuiz(result.userId || '') ? 'Resetting...' : 'Retest' }}
-            </button>
-          </td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-            {{ result.quizDate ? (result.quizDate | date: 'dd MMM yyyy') : '-' }}
-          </td>
-        </tr>
-      </tbody>
+        <!-- Results list -->
+        <tbody class="bg-white divide-y divide-gray-200" *ngIf="paginatedResults.length > 0">
+          <tr *ngFor="let result of paginatedResults">
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ result.name }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ result.email }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">
+              <button *ngIf="result.totalQuestions > 0" (click)="showSkillDetails(result)"
+                class="cursor-pointer hover:underline"
+                [class]="result.overallPercentage >= 70 ? 'text-green-600' : result.overallPercentage >= 50 ? 'text-yellow-600' : 'text-red-600'">
+                {{ result.totalMarks }}/{{ result.totalQuestions }}
+                <span *ngIf="!result.skillResults || result.skillResults.length === 0"
+                  class="text-xs text-purple-600 ml-1">(AI)</span>
+              </button>
+              <span *ngIf="result.totalQuestions === 0" class="text-gray-400">-</span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">
+              <button *ngIf="result.aiScore" (click)="showAISkillDetails(result)" class="cursor-pointer hover:underline"
+                [class]="result.aiScore.overallPercentage >= 70 ? 'text-green-600' : result.aiScore.overallPercentage >= 50 ? 'text-yellow-600' : 'text-red-600'">
+                {{ result.aiScore.totalMarks }}/{{ result.aiScore.totalQuestions }}
+              </button>
+              <span *ngIf="!result.aiScore" class="text-gray-400">-</span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+              <button class="text-orange-600 hover:text-orange-800 disabled:opacity-50 disabled:cursor-not-allowed mr-2"
+                (click)="resetQuiz(result)" [disabled]="isResettingQuiz(result.userId || '')">
+                {{ isResettingQuiz(result.userId || '') ? 'Resetting...' : 'Retest' }}
+              </button>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+              {{ result.quizDate ? (result.quizDate | date: 'dd MMM yyyy') : '-' }}
+            </td>
+          </tr>
+        </tbody>
 
-      <!-- No results -->
-      <tbody *ngIf="paginatedResults.length === 0">
-        <tr>
-          <td colspan="6" class="px-6 py-12 text-center text-gray-500">
-            No one attempted test yet
-          </td>
-        </tr>
-      </tbody>
-    </table>
+        <!-- No results -->
+        <tbody *ngIf="paginatedResults.length === 0">
+          <tr>
+            <td colspan="6" class="px-6 py-12 text-center text-gray-500">
+              No one attempted test yet
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
-</div>
 
-<div *ngIf="!loading && filteredResults.length > 0" class="mt-4 flex justify-center items-center gap-2">
-  <button (click)="changePage(currentPage - 1)" [disabled]="currentPage === 0"
-    class="px-3 py-1 border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
-    Prev
-  </button>
-  <button *ngIf="totalPages > 0" (click)="changePage(0)"
-    [class]="currentPage === 0 ? 'px-3 py-1 bg-blue-600 text-white rounded' : 'px-3 py-1 border rounded hover:bg-gray-100'">
-    1
-  </button>
+  <div *ngIf="!loading && filteredResults.length > 0" class="mt-4 flex justify-center items-center gap-2">
+    <button (click)="changePage(currentPage - 1)" [disabled]="currentPage === 0"
+      class="px-3 py-1 border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
+      Prev
+    </button>
+    <button *ngIf="totalPages > 0" (click)="changePage(0)"
+      [class]="currentPage === 0 ? 'px-3 py-1 bg-blue-600 text-white rounded' : 'px-3 py-1 border rounded hover:bg-gray-100'">
+      1
+    </button>
 
-  <span *ngIf="currentPage > 2" class="px-2">...</span>
-  <button *ngFor="let pageIndex of getVisiblePages()" (click)="changePage(pageIndex)"
-    [class]="currentPage === pageIndex ? 'px-3 py-1 bg-blue-600 text-white rounded' : 'px-3 py-1 border rounded hover:bg-gray-100'">
-    {{pageIndex + 1}}
-  </button>
-  <span *ngIf="currentPage < totalPages - 3" class="px-2">...</span>
-  <button *ngIf="totalPages > 1 && currentPage !== totalPages - 1" (click)="changePage(totalPages - 1)"
-    [class]="currentPage === totalPages - 1 ? 'px-3 py-1 bg-blue-600 text-white rounded' : 'px-3 py-1 border rounded hover:bg-gray-100'">
-    {{totalPages}}
-  </button>
+    <span *ngIf="currentPage > 2" class="px-2">...</span>
+    <button *ngFor="let pageIndex of getVisiblePages()" (click)="changePage(pageIndex)"
+      [class]="currentPage === pageIndex ? 'px-3 py-1 bg-blue-600 text-white rounded' : 'px-3 py-1 border rounded hover:bg-gray-100'">
+      {{pageIndex + 1}}
+    </button>
+    <span *ngIf="currentPage < totalPages - 3" class="px-2">...</span>
+    <button *ngIf="totalPages > 1 && currentPage !== totalPages - 1" (click)="changePage(totalPages - 1)"
+      [class]="currentPage === totalPages - 1 ? 'px-3 py-1 bg-blue-600 text-white rounded' : 'px-3 py-1 border rounded hover:bg-gray-100'">
+      {{totalPages}}
+    </button>
 
-  <button (click)="changePage(currentPage + 1)" [disabled]="currentPage >= totalPages - 1"
-    class="px-3 py-1 border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
-    Next
-  </button>
-</div>
+    <button (click)="changePage(currentPage + 1)" [disabled]="currentPage >= totalPages - 1"
+      class="px-3 py-1 border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
+      Next
+    </button>
+  </div>
 
   <!-- Skill Details Modal -->
   <div *ngIf="selectedResult" class="fixed inset-0 overflow-y-auto h-full w-full z-50">
@@ -305,9 +306,11 @@
 
             <div class="flex justify-between items-start mb-2">
               <span class="font-medium text-gray-900">Question {{ i + 1 }}</span>
-              <span [class]="question.userAnswer === question.correctanswer ? 'text-green-600' : 'text-red-600'"
+              <span
+                [class]="question.userAnswer?.toLowerCase() === question.correctanswer?.toLowerCase() ? 'text-green-600' : 'text-red-600'"
                 class="font-semibold">
-                {{ question.userAnswer === question.correctanswer ? '✓ Correct' : '✗ Incorrect' }}
+                {{ question.userAnswer?.toLowerCase() === question.correctanswer?.toLowerCase() ? '✓ Correct' : '✗
+                Incorrect' }}
               </span>
             </div>
 
@@ -315,20 +318,22 @@
 
             <div class="grid grid-cols-2 gap-2 mb-3">
               <div *ngFor="let option of ['a', 'b', 'c', 'd']" class="p-2 rounded border"
-                [class.bg-green-100]="question.correctanswer === option"
-                [class.bg-red-100]="question.userAnswer === option && question.userAnswer !== question.correctanswer"
-                [class.bg-blue-100]="question.userAnswer === option && question.userAnswer === question.correctanswer">
+                [class.bg-green-100]="question.correctanswer?.toLowerCase() === option.toLowerCase()"
+                [class.bg-red-100]="question.userAnswer?.toLowerCase() === option.toLowerCase() && question.userAnswer?.toLowerCase() !== question.correctanswer?.toLowerCase()"
+                [class.bg-blue-100]="question.userAnswer?.toLowerCase() === option.toLowerCase() && question.userAnswer?.toLowerCase() === question.correctanswer?.toLowerCase()">
                 <span class="font-medium">{{ option.toUpperCase() }}.</span> {{ question.options[option] }}
-                <span *ngIf="question.correctanswer === option" class="ml-2 text-green-600 font-bold">✓</span>
-                <span *ngIf="question.userAnswer === option && question.userAnswer !== question.correctanswer"
+                <span *ngIf="question.correctanswer?.toLowerCase() === option.toLowerCase()"
+                  class="ml-2 text-green-600 font-bold">✓</span>
+                <span
+                  *ngIf="question.userAnswer?.toLowerCase() === option.toLowerCase() && question.userAnswer?.toLowerCase() !== question.correctanswer?.toLowerCase()"
                   class="ml-2 text-red-600 font-bold">✗</span>
               </div>
             </div>
 
             <div class="text-sm text-gray-600">
               <span class="font-medium">User's Answer:</span> {{ question.userAnswer?.toUpperCase() || 'Not answered' }}
-              <span *ngIf="question.userAnswer !== question.correctanswer" class="ml-2">
-                <span class="font-medium">Correct Answer:</span> {{ question.correctanswer.toUpperCase() }}
+              <span *ngIf="question.userAnswer?.toLowerCase() !== question.correctanswer?.toLowerCase()" class="ml-2">
+                <span class="font-medium">Correct Answer:</span> {{ question.correctanswer?.toUpperCase() }}
               </span>
             </div>
           </div>
@@ -366,8 +371,11 @@
 
             <div class="flex justify-between items-start mb-2">
               <span class="font-medium text-gray-900">Question {{ i + 1 }}</span>
-              <span [class]="question.isCorrect ? 'text-green-600' : 'text-red-600'" class="font-semibold">
-                {{ question.isCorrect ? '✓ Correct' : '✗ Incorrect' }}
+              <span
+                [class]="(question.isCorrect || question.userAnswer?.toLowerCase() === question.correctanswer?.toLowerCase()) ? 'text-green-600' : 'text-red-600'"
+                class="font-semibold">
+                {{ (question.isCorrect || question.userAnswer?.toLowerCase() === question.correctanswer?.toLowerCase())
+                ? '✓ Correct' : '✗ Incorrect' }}
               </span>
             </div>
 

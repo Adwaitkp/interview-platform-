@@ -5,35 +5,24 @@ import { HeaderComponent } from './header/header';
 import { CandidateManagement } from './candidate-management/candidate-management'
 import { QuestionsComponent } from './questions/questions';
 import { QuizComponent } from './quiz/quiz';
-import { AIQuestionsComponent } from './ai-questions/ai-questions';
+
 import { AIQuizComponent } from './ai-quiz/ai-quiz';
-import { AcceptedQuestionsComponent } from './accepted-questions/accepted-questions';
+
+import { UnifiedQuestionsComponent } from './unified-question/unified-questions'; // Change this line
 
 export const routes: Routes = [
-  { path: '',         redirectTo: 'login', pathMatch: 'full' },
-
-  // Login page
-  { path: 'login',    component: Login },
-
-  // Admin dashboard page
+  { path: '', redirectTo: 'login', pathMatch: 'full' },
+  { path: 'login', component: Login },
   { path: 'admin-dashboard', component: AdminDashboardComponent },
-
-  // User info page
   { path: 'candidate-management', component: CandidateManagement },
-
-  {path : 'header', component: HeaderComponent},
-
-  {path : 'questions', component: QuestionsComponent},
-
+  { path: 'header', component: HeaderComponent },
+  { path: 'questions', component: QuestionsComponent }, // Normal questions 
   { path: 'quiz', component: QuizComponent },
-
-  // AI Quiz routes
-  { path: 'ai-questions', component: AIQuestionsComponent },
   { path: 'ai-quiz', component: AIQuizComponent },
+  
+ 
+  { path: 'ai-questions-unified', component: UnifiedQuestionsComponent },
 
-  // Accepted Questions route
-  { path: 'accepted-questions', component: AcceptedQuestionsComponent },
-
-  // Wild-card – keep last
-  { path: '**',       redirectTo: 'login' }
+  
+  { path: '**', redirectTo: 'login' }
 ];

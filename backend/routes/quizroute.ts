@@ -199,8 +199,6 @@ router.get('/result/:resultId', async (req: Request, res: Response) => {
   }
 });
 
-
-
 // Check quiz completion status for current user (interviewee)
 router.get('/check-status', async (req: Request, res: Response) => {
   try {

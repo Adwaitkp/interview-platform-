@@ -7,12 +7,13 @@ export interface IUser extends Document {
   password: string;
   role: 'admin' | 'interviewee';
   skill?: string[];
-  level?: string[];   // Allow multiple levels
+  level?: string[];   
   quizCompleted?: boolean;
   aiQuizCompleted?: boolean;
   questionCounts?: { [skill: string]: { [level: string]: number } };
   assignedQuestions?: Map<string, string[]>;
-  quizType?: string; // Added quizType property
+  quizType?: string; 
+  assignedSetId?: string;
 }
 
 const userSchema = new Schema<IUser>({
@@ -33,6 +34,7 @@ const userSchema = new Schema<IUser>({
     }
   },
   quizType: { type: String },
+  assignedSetId: { type: String, default: null },
 }, 
   { timestamps: true } 
 );

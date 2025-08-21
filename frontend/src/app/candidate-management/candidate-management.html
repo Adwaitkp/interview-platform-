@@ -63,8 +63,10 @@
             <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Skills</th>
             <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Level</th>
             <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Questions</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Quiz Type</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quiz Type</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Set Selection
+            </th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
             <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Created On</th>
           </tr>
         </thead>
@@ -100,7 +102,6 @@
                     <span class="text-sm">{{ skill }}</span>
                   </div>
                 </div>
-
               </td>
               <td class="px-6 py-4">
                 <div class="border border-gray-300 rounded-md p-2 max-h-32 overflow-y-auto bg-white">
@@ -119,7 +120,6 @@
                     <span class="text-sm">{{ level }}</span>
                   </div>
                 </div>
-
               </td>
               <td class="px-6 py-4">
                 <button (click)="openQuestionDetails(user)"
@@ -161,6 +161,18 @@
                   </button>
                 </div>
               </td>
+              <!-- ADD THIS SET SELECTION COLUMN FOR EDIT MODE -->
+              <td class="px-6 py-4" *ngIf="editUserId === user._id">
+                <select [(ngModel)]="user.assignedSetId" (change)="onSetSelectionChange(user._id, $event)"
+                  class="px-2 py-1 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500">
+                  <option [value]="null">No Set Assigned</option>
+                  <option *ngFor="let setId of getUserAvailableSets(user._id); let i = index" [value]="setId">
+                    Set {{ i + 1 }}
+                  </option>
+                </select>
+              </td>
+
+
               <td class="px-6 py-4">
                 <div class="flex space-x-2">
                   <button (click)="handleEditSave(user._id)"
@@ -247,12 +259,23 @@
                   </button>
                 </div>
               </td>
+              <!-- ADD THIS SET SELECTION COLUMN FOR VIEW MODE -->
+              <td class="px-6 py-4" *ngIf="editUserId !== user._id">
+                <select [(ngModel)]="user.assignedSetId" (change)="onSetSelectionChange(user._id, $event)"
+                  (focus)="loadUserSetsForDropdown(user._id)"
+                  class="px-2 py-1 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500">
+                  <option [value]="null">No Set Assigned</option>
+                  <option *ngFor="let setId of getUserAvailableSets(user._id); let i = index" [value]="setId">
+                    Set {{ i + 1 }}
+                  </option>
+                </select>
+              </td>
+
               <td class="px-6 py-4">
                 <div class="flex space-x-2">
                   <button (click)="startReset(user)"
                     class="text-amber-600 hover:text-amber-900 text-sm font-medium transition-colors duration-200"
                     title="Reset Password">
-
                     <!-- Reset Icon (Heroicons-style) -->
                     <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="currentColor" viewBox="0 0 512 512">
                       <g id="Change_password">
@@ -266,12 +289,10 @@
                           d="M343.6533,207.756V171.7538a87.6533,87.6533,0,0,0-175.3066,0V207.756H188.14V171.7538a67.86,67.86,0,0,1,135.7208,0V207.756Z" />
                       </g>
                     </svg>
-
                   </button>
                   <button (click)="confirmDelete(user._id)"
                     class="text-red-600 hover:text-red-900 text-sm font-medium transition-colors duration-200"
                     title="Delete User">
-
                     <!-- Trash Icon -->
                     <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-red-600 hover:text-red-900"
                       viewBox="0 0 24 24" fill="currentColor">
@@ -284,7 +305,6 @@
                       <path
                         d="M14.5747 10.2538C14.9869 10.295 15.2876 10.6625 15.2464 11.0747L14.7464 16.0747C14.7052 16.4868 14.3376 16.7875 13.9255 16.7463C13.5133 16.7051 13.2126 16.3376 13.2538 15.9254L13.7538 10.9254C13.795 10.5133 14.1626 10.2125 14.5747 10.2538Z" />
                     </svg>
-
                   </button>
                 </div>
               </td>
@@ -301,13 +321,12 @@
 
     <!-- Empty State -->
     <div *ngIf="users.length === 0 && !loading" class="text-center py-12">
-
       <h3 class="mt-2 text-sm font-medium text-gray-900">No users found</h3>
       <p class="mt-1 text-sm text-gray-500" *ngIf="searchTerm">Try a different search term or clear the search.</p>
       <p class="mt-1 text-sm text-gray-500" *ngIf="!searchTerm">Get started by adding a new interviewee.</p>
     </div>
-
-  </div> <!-- End of users table box -->
+  </div>
+  <!-- End of users table box -->
   <!-- </div>  -->
   <!-- Pagination Bar OUTSIDE the box and container -->
   <div *ngIf="!loading && users.length > 0" class="mt-4 flex justify-center items-center gap-2">
@@ -506,7 +525,12 @@
             class="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors duration-200">
             New Set
           </button>
+          <button (click)="skipAndAssignAI()"
+            class="px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors duration-200">
+            Skip
+          </button>
         </div>
+
       </div>
     </div>
   </div>

@@ -108,17 +108,17 @@ export class AdminDashboardComponent implements OnInit {
   totalPages: number = 0;
   totalResults: number = 0;
 
- getVisiblePages(): number[] {
-  if (this.totalPages <= 2) {
-    return []; 
+  getVisiblePages(): number[] {
+    if (this.totalPages <= 2) {
+      return [];
+    }
+
+    const pages: number[] = [];
+    for (let i = 1; i < this.totalPages - 1; i++) {
+      pages.push(i);
+    }
+    return pages;
   }
-  
-  const pages: number[] = [];
-  for (let i = 1; i < this.totalPages - 1; i++) {
-    pages.push(i);
-  }
-  return pages;
-}
 
   changePage(page: number): void {
     if (page < 0 || page >= this.totalPages) return;
@@ -128,7 +128,7 @@ export class AdminDashboardComponent implements OnInit {
 
   constructor(private http: HttpClient, private router: Router) { }
 
-  ngOnInit(): void {
+  async ngOnInit(): Promise<void> {
     const token = localStorage.getItem('token');
     if (!token) {
       this.router.navigate(['/login']);
@@ -136,31 +136,62 @@ export class AdminDashboardComponent implements OnInit {
     }
 
     // Load users first, then load results
-    this.loadUsers().then(() => {
+    // Load users first, then load results
+    try {
+      await this.loadUsers();
+      console.log('Users loaded:', this.users.length); // Debug log
       this.loadResults();
-    });
+    } catch (error) {
+      console.error('Error loading users:', error);
+      this.loadResults(); // Still try to load results
+    }
   }
 
   async loadUsers(): Promise<void> {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-
-      const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
-      const response = await firstValueFrom(
-        this.http.get<any>(`${environment.apiUrl}/admin/users`, { headers })
-      );
-
-      // Make sure it's always an array
-      const users = Array.isArray(response) ? response : (response?.data || []);
-
-      // keep only interviewees
-      this.users = users.filter((u: any) => u.role !== 'admin');
-
-    } catch (error) {
-      console.error('Error loading users:', error);
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      console.error('No token found');
+      return;
     }
+
+    const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
+    console.log('Loading users from:', `${environment.apiUrl}/admin/users`); // Debug log
+    
+    const response = await firstValueFrom(
+      this.http.get<any>(`${environment.apiUrl}/admin/users`, { headers })
+    );
+
+    console.log('Raw users response:', response); // Debug log
+
+    // Handle different response structures
+    let users = [];
+    if (Array.isArray(response)) {
+      users = response;
+    } else if (response?.data && Array.isArray(response.data)) {
+      users = response.data;
+    } else if (response?.users && Array.isArray(response.users)) {
+      users = response.users;
+    } else if (response && typeof response === 'object') {
+      // Try to find any array property in the response
+      const arrayProps = Object.keys(response).filter(key => Array.isArray(response[key]));
+      if (arrayProps.length > 0) {
+        users = response[arrayProps[0]];
+      }
+    }
+
+    console.log('Processed users array:', users); // Debug log
+
+    // Keep only interviewees (non-admin users)
+    this.users = users.filter((u: any) => u.role !== 'admin');
+    
+    console.log('Filtered users (non-admin):', this.users); // Debug log
+
+  } catch (error) {
+    console.error('Error loading users:', error);
+    console.error('Error details:', error);
   }
+}
 
 
   async loadResults(): Promise<void> {
@@ -199,10 +230,12 @@ export class AdminDashboardComponent implements OnInit {
 
       // 1) add regular quiz results and ensure quizDate is set
       quizResults.forEach((result: any) => {
+        const user = this.users.find(u => u.email === result.email);
+        console.log('Finding user for email:', result.email, 'Found user:', user); // Debug log
         combinedResults.push({
           ...result,
-          quizDate: result.quizDate || result.createdAt || null, // use quizDate if backend already sent it or createdAt
-          userId: this.users.find(u => u.email === result.email)?._id || '',
+          quizDate: result.quizDate || result.createdAt || null,
+          userId: user?._id || result.userId || '', // Try multiple sources
           aiScore: undefined
         });
       });
@@ -226,6 +259,8 @@ export class AdminDashboardComponent implements OnInit {
           // Prefer AI quiz date if AI exists (overwrites normal quiz date)
           existingResult.quizDate = aiResult.quizDate || aiResult.createdAt || existingResult.quizDate;
         } else {
+          const user = this.users.find(u => u.email === aiResult.email);
+          console.log('Finding user for AI email:', aiResult.email, 'Found user:', user); // Debug log
           combinedResults.push({
             _id: aiResult._id,
             name: aiResult.name,
@@ -235,7 +270,7 @@ export class AdminDashboardComponent implements OnInit {
             overallPercentage: 0,
             skillResults: [],
             quizDate: aiResult.quizDate || aiResult.createdAt || null,
-            userId: this.users.find(u => u.email === aiResult.email)?._id || '',
+            userId: user?._id || aiResult.userId || '', // Try multiple sources
             aiScore: {
               totalMarks: aiResult.totalMarks,
               totalQuestions: aiResult.totalQuestions,
@@ -311,9 +346,21 @@ export class AdminDashboardComponent implements OnInit {
   }
 
   async resetQuiz(result: QuizResult) {
+    console.log('Reset quiz called for result:', result); // Debug log
+    console.log('User ID:', result.userId); // Debug log
+    console.log('Available users:', this.users); // Debug log
+
     if (!result.userId) {
-      alert('User ID not found. Cannot reset quiz.');
-      return;
+      // Try to find user ID by email as fallback
+      const user = this.users.find(u => u.email === result.email);
+      if (user && user._id) {
+        result.userId = user._id;
+        console.log('Found fallback user ID:', result.userId);
+      } else {
+        console.error('No user found for email:', result.email);
+        alert('User ID not found. Cannot reset quiz.');
+        return;
+      }
     }
 
     if (confirm(`Are you sure you want to reset the quiz for ${result.name}? They will be able to take the quiz again with different questions.`)) {

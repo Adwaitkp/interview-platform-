@@ -5,10 +5,29 @@ import axios from 'axios';
 import isAdmin from '../../middleware/isadmin';
 import { v4 as uuidv4 } from 'uuid';
 
-// Define CustomRequest interface
 interface CustomRequest extends Request {
   userId?: string;
   userRole?: string;
+}
+
+// Add these new interfaces
+interface PopulatedUser {
+  _id: string;
+  name: string;
+}
+
+interface PopulatedAIQuestion {
+  _id: string;
+  skill: string;
+  level: string;
+  question: string;
+  options: any;
+  correctanswer: string;
+  reviewStatus: string;
+  setid: string;
+  assignedTo?: PopulatedUser | any;
+  generatedBy?: PopulatedUser | any;
+  createdAt: Date;
 }
 
 const router = express.Router();
@@ -187,29 +206,35 @@ router.get('/user-sets/:userId', isAdmin, async (req: CustomRequest, res: Respon
 // Get all AI questions for admin review
 router.get('/all-ai-questions', isAdmin, async (req: CustomRequest, res: Response) => {
   try {
-    const { generatedBy, reviewStatus, skill, level, excludeApproved, search } = req.query;
-
+    const { generatedBy, reviewStatus, skill, level, excludeApproved, search, page, limit, candidateName, setNumber } = req.query;
+    
+    const candidateNameStr = candidateName as string;
     const query: any = {};
+    
     if (generatedBy) {
       query.generatedBy = generatedBy;
     }
+
     if (reviewStatus) {
       query.reviewStatus = reviewStatus;
     } else if (excludeApproved === 'true') {
       query.reviewStatus = { $ne: 'approved' };
     }
-    
-    // ✅ CASE-INSENSITIVE SKILL FILTER:
+
+    // For set mapping, we need all questions regardless of status
+    if (limit === '10000') {
+      // This is for set mapping, get all questions
+      delete query.reviewStatus;
+    }
+
     if (skill) {
       query.skill = { $regex: new RegExp(`^${skill}$`, 'i') };
     }
-    
-    // ✅ CASE-INSENSITIVE LEVEL FILTER:
+
     if (level) {
       query.level = { $regex: new RegExp(`^${level}$`, 'i') };
     }
 
-    // ✅ SEARCH FUNCTIONALITY:
     if (search) {
       query.$or = [
         { question: { $regex: search, $options: 'i' } },
@@ -219,15 +244,120 @@ router.get('/all-ai-questions', isAdmin, async (req: CustomRequest, res: Respons
       ];
     }
 
-    const questions = await AIQuestions.find(query).sort({ createdAt: -1 });
-    res.json(questions);
+    // Add set number filtering
+    if (setNumber) {
+      const setNumberInt = parseInt(setNumber as string);
+      if (setNumberInt > 0) {
+        const allQuestionsForSetMapping = await AIQuestions.find()
+          .populate('generatedBy', 'name')
+          .populate('assignedTo', 'name');
+          
+        const candidateSets = new Map();
+        allQuestionsForSetMapping.forEach((q: any) => {
+          // Fixed type checking
+          const generatedByName = (q.generatedBy && typeof q.generatedBy === 'object' && 'name' in q.generatedBy) ? q.generatedBy.name : '';
+          const assignedToName = (q.assignedTo && typeof q.assignedTo === 'object' && 'name' in q.assignedTo) ? q.assignedTo.name : '';
+          const candidateName = generatedByName || assignedToName || 'Not Assigned';
+          
+          if (!candidateSets.has(candidateName)) {
+            candidateSets.set(candidateName, []);
+          }
+          if (q.setid && !candidateSets.get(candidateName).includes(q.setid)) {
+            candidateSets.get(candidateName).push(q.setid);
+          }
+        });
+
+        const matchingSetIds: string[] = [];
+        candidateSets.forEach(sets => {
+          sets.sort();
+          if (sets[setNumberInt - 1]) {
+            matchingSetIds.push(sets[setNumberInt - 1]);
+          }
+        });
+
+        if (matchingSetIds.length > 0) {
+          query.setid = { $in: matchingSetIds };
+        } else {
+          query._id = { $in: [] };
+        }
+      }
+    }
+
+    // Add pagination
+    const pageNum = parseInt(page as string) || 0;
+    const limitNum = parseInt(limit as string) || 10;
+
+    let questions: any[];
+    let totalQuestions: number;
+
+    // Handle candidate name filtering
+    if (candidateNameStr && candidateNameStr.trim()) {
+      // First get all questions with populated fields
+      const allQuestions = await AIQuestions.find(query)
+        .populate('generatedBy', 'name')
+        .populate('assignedTo', 'name')
+        .sort({ createdAt: -1 });
+      
+      // Filter by candidate name with fixed type checking
+      const filteredQuestions = allQuestions.filter((q: any) => {
+        const generatedByName = (q.generatedBy && typeof q.generatedBy === 'object' && 'name' in q.generatedBy) ? q.generatedBy.name : '';
+        const assignedToName = (q.assignedTo && typeof q.assignedTo === 'object' && 'name' in q.assignedTo) ? q.assignedTo.name : '';
+        
+        return (generatedByName && generatedByName.toLowerCase().includes(candidateNameStr.toLowerCase())) ||
+               (assignedToName && assignedToName.toLowerCase().includes(candidateNameStr.toLowerCase()));
+      });
+
+      // Apply pagination to filtered results
+      if (limitNum === 10000) {
+        // For set mapping, return all questions
+        questions = filteredQuestions;
+        res.json(questions);
+        return;
+      } else {
+        // Normal pagination
+        const startIndex = pageNum * limitNum;
+        const endIndex = startIndex + limitNum;
+        questions = filteredQuestions.slice(startIndex, endIndex);
+        totalQuestions = filteredQuestions.length;
+      }
+    } else {
+      // No candidate name filtering
+      if (limitNum === 10000) {
+        // For set mapping, return all questions without pagination
+        questions = await AIQuestions.find(query)
+          .populate('generatedBy', 'name')
+          .populate('assignedTo', 'name')
+          .sort({ createdAt: -1 });
+        
+        res.json(questions);
+        return;
+      } else {
+        // Normal pagination
+        questions = await AIQuestions.find(query)
+          .populate('generatedBy', 'name')
+          .populate('assignedTo', 'name')
+          .sort({ createdAt: -1 })
+          .skip(pageNum * limitNum)
+          .limit(limitNum);
+
+        totalQuestions = await AIQuestions.countDocuments(query);
+      }
+    }
+
+    const totalPages = Math.ceil(totalQuestions / limitNum);
+
+    res.json({
+      questions,
+      totalPages,
+      currentPage: pageNum,
+      totalQuestions
+    });
+    
   } catch (error) {
     console.error('Error fetching AI questions:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
-
-
 
 // Get pending AI questions for admin review
 router.get('/pending-ai-questions', isAdmin, async (req: CustomRequest, res: Response) => {
@@ -239,7 +369,12 @@ router.get('/pending-ai-questions', isAdmin, async (req: CustomRequest, res: Res
       query.generatedBy = generatedBy;
     }
 
-    const pendingQuestions = await AIQuestions.find(query).sort({ createdAt: -1 });
+    const pendingQuestions = await AIQuestions.find(query)
+      .populate('generatedBy', 'name')
+      .populate('assignedTo', 'name')
+      .sort({ createdAt: -1 });
+    res.json(pendingQuestions);
+
 
     res.json(pendingQuestions);
   } catch (error) {
@@ -264,7 +399,18 @@ router.post('/approve-ai-question', isAdmin, async (req: CustomRequest, res: Res
 
     question.reviewStatus = 'approved';
     if (assignedTo) {
-      question.assignedTo = new mongoose.Types.ObjectId(assignedTo);
+      let assignedToId;
+      if (typeof assignedTo === 'object' && assignedTo._id) {
+        assignedToId = assignedTo._id;
+      } else if (typeof assignedTo === 'string') {
+        assignedToId = assignedTo;
+      } else {
+        assignedToId = assignedTo;
+      }
+
+      if (assignedToId) {
+        question.assignedTo = new mongoose.Types.ObjectId(assignedToId);
+      }
     }
 
     await question.save();
@@ -339,5 +485,45 @@ router.get('/approved-ai-questions/:userId', async (req: Request, res: Response)
     res.status(500).json({ message: 'Server error' });
   }
 });
+// Add these routes before export default router;
+router.get('/all-sets', isAdmin, async (req: CustomRequest, res: Response) => {
+  try {
+    const sets = await AIQuestions.distinct("setid");
+    res.json({ sets });
+  } catch (error) {
+    console.error('Error fetching all sets:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.get('/approved-ai-questions-by-set/:userId', async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    if (!userId) {
+      return res.status(400).json({ message: 'Missing userId' });
+    }
+
+    const objectId = new mongoose.Types.ObjectId(userId);
+
+    // Import User model at the top of your file if not already imported
+    const User = mongoose.model('User');
+    const user = await User.findById(objectId);
+
+    if (!user || !user.assignedSetId) {
+      return res.json([]);
+    }
+
+    const questions = await AIQuestions.find({
+      reviewStatus: 'approved',
+      setid: user.assignedSetId
+    }).sort({ createdAt: -1 });
+
+    res.json(questions);
+  } catch (error) {
+    console.error('Error fetching questions by set:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 
 export default router; 

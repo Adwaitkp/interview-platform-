@@ -140,7 +140,7 @@ export class AIQuizComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const apiUrl = `${environment.apiUrl}/ai-quiz/approved-ai-questions/${userId}`;
+    const apiUrl = `${environment.apiUrl}/ai-quiz/approved-ai-questions-by-set/${userId}`;
 
     this.http.get(apiUrl, {
       headers: token ? { Authorization: `Bearer ${token}` } : {}

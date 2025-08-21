@@ -20,31 +20,32 @@ export class HeaderComponent implements OnInit {
     this.role = localStorage.getItem('role') || '';
   }
 
-  navigateTo(target: string): void {
-    switch (target) {
-      case 'admin-dashboard':
-        this.router.navigate(['/admin-dashboard']);
-        break;
-      case 'candidate-management':
-        this.router.navigate(['/candidate-management']);
-        break;
-      case 'questions':
-        this.router.navigate(['/questions']);
-        break;
-      case 'ai-questions':
-        this.router.navigate(['/ai-questions']);
-        break;
-      case 'quiz':
-        this.router.navigate(['/quiz']);
-        break;
-      case 'ai-quiz':
-        this.router.navigate(['/ai-quiz']);
-        break;
-      default:
-        break;
-    }
-    this.profileOpen = false;
+navigateTo(target: string): void {
+  switch (target) {
+    case 'admin-dashboard':
+      this.router.navigate(['/admin-dashboard']);
+      break;
+    case 'candidate-management':
+      this.router.navigate(['/candidate-management']);
+      break;
+    case 'questions':
+      this.router.navigate(['/questions']); // Keep this - for normal questions
+      break;
+    case 'ai-questions':
+      this.router.navigate(['/ai-questions-unified']); // CHANGE THIS LINE
+      break;
+    case 'quiz':
+      this.router.navigate(['/quiz']);
+      break;
+    case 'ai-quiz':
+      this.router.navigate(['/ai-quiz']);
+      break;
+    default:
+      break;
   }
+  this.profileOpen = false;
+}
+
 
   logout(): void {
     // Preserve quiz state during logout

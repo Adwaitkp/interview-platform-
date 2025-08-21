@@ -12,6 +12,8 @@ export interface IAIQuestion extends Document {
   generatedBy: mongoose.Types.ObjectId;
   questionCount: number;
   setid: string;
+  createdAt: Date;    // <- add this line
+  updatedAt: Date;
 }
 
 const AIQuestionSchema = new Schema<IAIQuestion>({

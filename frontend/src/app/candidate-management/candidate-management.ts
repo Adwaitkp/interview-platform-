@@ -39,6 +39,10 @@ export class CandidateManagement implements OnInit {
   totalUsers: number = 0;
   searchTerm: string = '';
 
+  allAvailableSets: string[] = [];
+  userSpecificSets: { [userId: string]: string[] } = {};
+  userSetsLoaded: { [userId: string]: boolean } = {};
+
   // AI Test Mode properties
   showAITestModal: boolean = false;
   selectedUserForAI: any = null;
@@ -49,6 +53,7 @@ export class CandidateManagement implements OnInit {
   showSuccessModal: boolean = false;
 
   availableSetIds: string[] = [];
+
   selectedSetId: string = '';
   showSetChoiceModal: boolean = false;
   useExistingSet: boolean = false;
@@ -56,35 +61,11 @@ export class CandidateManagement implements OnInit {
   constructor(private http: HttpClient, private cdr: ChangeDetectorRef) { }
 
   ngOnInit(): void {
-    this.getAllUsers();
+    this.getAllUsers(); // Change this line
   }
 
-  getAllUsers() {
-    this.loading = true;
-    const token = localStorage.getItem('token');
-    this.http.get(`${environment.apiUrl}/admin/users?page=${this.currentPage}&limit=${this.pageSize}&search=${this.searchTerm}`, {
-      headers: new HttpHeaders({
-        'Authorization': `Bearer ${token}`
-      })
-    }).subscribe({
-      next: (res: any) => {
-        this.users = res.users;
-        this.totalPages = res.totalPages;
-        this.totalUsers = res.totalUsers;
-        this.loading = false;
-      },
-      error: (err) => {
-        console.error('Failed to fetch users', err);
-        this.loading = false;
-      }
-    });
-  }
 
-  setSearch(term: string) {
-    this.searchTerm = term;
-    this.currentPage = 0; // Reset to first page when searching
-    this.getAllUsers();
-  }
+
 
   handleEditChange(userId: string, field: string, value: any) {
     if (!this.editForms[userId]) {
@@ -350,6 +331,12 @@ export class CandidateManagement implements OnInit {
     }
   }
 
+  setSearch(term: string) {
+    this.searchTerm = term;
+    this.currentPage = 0; // Reset to first page when searching
+    this.getAllUsers();
+  }
+
   onSearchInput(event: Event): void {
     const target = event.target as HTMLInputElement;
     this.setSearch(target.value);
@@ -589,6 +576,19 @@ export class CandidateManagement implements OnInit {
 
     this.initializeSkillLevelsAndShowModal(userSkills, userLevels);
   }
+  skipAndAssignAI() {
+    if (!this.selectedUserForAI) return;
+
+    // Skip all generation and directly assign AI quiz type
+    this.assignQuizType(this.selectedUserForAI._id, 'ai').then(() => {
+      this.closeSetChoiceModal();
+      this.getAllUsers();
+    }).catch(err => {
+      console.error('Failed to assign AI quiz type:', err);
+      alert('Failed to assign AI quiz type');
+    });
+  }
+
   closeAITestModal(): void {
     this.showAITestModal = false;
     this.selectedUserForAI = null;
@@ -596,12 +596,12 @@ export class CandidateManagement implements OnInit {
   }
 
   closeSetChoiceModal() {
-  this.showSetChoiceModal = false;
-  this.selectedUserForAI = null;
-  this.availableSetIds = [];
-  this.selectedSetId = '';
-  this.useExistingSet = false;
-}
+    this.showSetChoiceModal = false;
+    this.selectedUserForAI = null;
+    this.availableSetIds = [];
+    this.selectedSetId = '';
+    this.useExistingSet = false;
+  }
 
   addSkillLevel(): void {
     this.skillLevels.push({ skill: '', level: '', count: 1 });
@@ -655,9 +655,157 @@ export class CandidateManagement implements OnInit {
   // handleSuccessModalAction method
   handleSuccessModalAction(shouldRedirect: boolean): void {
     this.showSuccessModal = false;
-
     if (shouldRedirect) {
-      window.location.href = '/ai-questions';
+      window.location.href = '/ai-questions-unified';
+    }
+  }
+
+  updateAssignedSetImmediate(userId: string, setId: string | null) {
+    // First, update the UI immediately
+    const userIndex = this.users.findIndex((u: any) => u._id === userId);
+    if (userIndex !== -1) {
+      this.users[userIndex].assignedSetId = setId;
+      console.log(`UI updated immediately for user ${userId}:`, this.users[userIndex].assignedSetId);
+    }
+
+    // Then sync with backend
+    const token = localStorage.getItem('token');
+
+    this.http.patch(`${environment.apiUrl}/admin/users/${userId}`, {
+      assignedSetId: setId
+    }, {
+      headers: new HttpHeaders({
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      })
+    }).subscribe({
+      next: (response: any) => {
+        console.log('Backend confirmed update:', response);
+      },
+      error: (err: any) => {
+        console.error('Backend update failed, reverting UI:', err);
+        if (userIndex !== -1) {
+          alert(`Failed to update set. Error: ${err.error?.message || 'Unknown error'}`);
+          this.getAllUsers();
+        }
+      }
+    });
+  }
+
+  onSetSelectionChange(userId: string, event: Event): void {
+    const target = event.target as HTMLSelectElement;
+    const value = target.value;
+
+    console.log(`Set selection changed for user ${userId}:`, {
+      rawValue: value,
+      isEmpty: value === '',
+      finalValue: value === '' ? null : value
+    });
+
+    // Convert empty string to null, otherwise keep the value
+    const setIdToSend = value === '' ? null : value;
+    this.updateAssignedSetImmediate(userId, setIdToSend);
+  }
+  async loadUserSets(userId: string): Promise<any[]> {
+    if (this.userSetsLoaded[userId]) {
+      return this.userSpecificSets[userId] || [];
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const headers = new HttpHeaders({ 'Authorization': `Bearer ${token}` });
+      const response = await this.http.get(`${environment.apiUrl}/ai-quiz/user-sets/${userId}`, { headers }).toPromise();
+      const userSets = (response as any).sets || [];
+
+      this.userSpecificSets[userId] = userSets;
+      this.userSetsLoaded[userId] = true;
+
+      console.log(`Loaded ${userSets.length} sets for user ${userId}`);
+      return userSets;
+    } catch (error) {
+      console.error('Error loading user sets:', error);
+      this.userSpecificSets[userId] = [];
+      this.userSetsLoaded[userId] = true;
+      return [];
+    }
+  }
+
+  // Enhanced getAllUsers method
+  getAllUsers() {
+    this.loading = true;
+    const token = localStorage.getItem('token');
+
+    this.http.get(`${environment.apiUrl}/admin/users?page=${this.currentPage}&limit=${this.pageSize}&search=${this.searchTerm}`, {
+      headers: new HttpHeaders({
+        'Authorization': `Bearer ${token}`
+      })
+    }).subscribe({
+      next: async (res: any) => {
+        console.log('=== FRESH USER DATA ===');
+
+        this.users = res.users;
+        this.totalPages = res.totalPages;
+        this.totalUsers = res.totalUsers;
+
+        // Debug assignedSetId values
+        this.users.forEach((user: any) => {
+          console.log(`${user.name}: assignedSetId = "${user.assignedSetId}" (${typeof user.assignedSetId})`);
+        });
+
+        // Load sets for all users
+        const setLoadPromises = this.users.map(user => {
+          if (!this.userSetsLoaded[user._id]) {
+            return this.loadUserSets(user._id).catch(error => {
+              console.error(`Failed to load sets for ${user._id}:`, error);
+            });
+          }
+          return Promise.resolve();
+        });
+
+        await Promise.all(setLoadPromises);
+
+        this.loading = false;
+        this.cdr.detectChanges();
+
+        console.log('All user data and sets loaded successfully');
+      },
+      error: (err) => {
+        console.error('Failed to fetch users', err);
+        this.loading = false;
+      }
+    });
+  }
+
+
+  getUserAvailableSets(userId: string): string[] {
+    // Ensure we only return sets for this specific user
+    return this.userSpecificSets[userId] || [];
+  }
+
+  // Get display name for user's set
+  getSetDisplayForUser(user: any): string {
+    if (!user.assignedSetId) return 'No Set Assigned';
+
+    const userSets = this.getUserAvailableSets(user._id);
+    const setIndex = userSets.indexOf(user.assignedSetId);
+
+    return setIndex !== -1 ? `Set ${setIndex + 1}` : 'Unknown Set';
+  }
+
+  getSelectedSetIndex(assignedSetId: string): string {
+    if (!assignedSetId || !this.allAvailableSets.length) {
+      return '';
+    }
+
+    return this.allAvailableSets.includes(assignedSetId) ? assignedSetId : '';
+  }
+
+  loadUserSetsForDropdown(userId: string): void {
+    if (!this.userSetsLoaded[userId]) {
+      console.log(`Loading sets for user ${userId} on dropdown focus`);
+      this.loadUserSets(userId).then(() => {
+        this.cdr.detectChanges();
+      });
     }
   }
 
