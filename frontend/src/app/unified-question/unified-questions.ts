@@ -92,16 +92,16 @@ export class UnifiedQuestionsComponent implements OnInit {
   }
 
   async loadAllData(): Promise<void> {
-  this.loading = true;
-  await Promise.all([
-    this.loadAllQuestionsForSetMapping(),
-    this.loadAIQuestions(),
-    this.loadAcceptedQuestions()
-  ]);
-  // Update set options after all data is loaded
-  this.updateSetOptions();
-  this.loading = false;
-}
+    this.loading = true;
+    await Promise.all([
+      this.loadAllQuestionsForSetMapping(),
+      this.loadAIQuestions(),
+      this.loadAcceptedQuestions()
+    ]);
+    // Update set options after all data is loaded
+    this.updateSetOptions();
+    this.loading = false;
+  }
 
   // AI Questions methods
   async loadAIQuestions(): Promise<void> {
@@ -137,14 +137,14 @@ export class UnifiedQuestionsComponent implements OnInit {
         .join('&');
 
       const url = `${environment.apiUrl}/ai-quiz/all-ai-questions${queryString ? '?' + queryString : ''}`;
-      
+
       // 📍 DEBUG: Log final URL
       console.log('=== DEBUG: API URL ===');
       console.log('Final URL:', url);
       console.log('======================');
 
       const response: any = await firstValueFrom(this.http.get(url, { headers }));
-      
+
       // 📍 DEBUG: Log response
       console.log('=== DEBUG: API Response ===');
       console.log('Response:', response);
@@ -189,7 +189,8 @@ export class UnifiedQuestionsComponent implements OnInit {
 
       // Combine both arrays for set mapping
       const acceptedQuestions = (acceptedResponse?.questions || []).map((q: any) => ({ ...q, source: 'Accepted' }));
-      const aiQuestions = (aiResponse || []).map((q: any) => ({ ...q, source: 'AI' }));
+      const aiQuestionsArray: any[] = Array.isArray(aiResponse) ? aiResponse : (aiResponse?.questions || []);
+      const aiQuestions = aiQuestionsArray.map((q: any) => ({ ...q, source: 'AI' }));
 
       this.allQuestionsForSetMapping = [...acceptedQuestions, ...aiQuestions];
       this.updateSetOptions();
@@ -234,62 +235,86 @@ export class UnifiedQuestionsComponent implements OnInit {
     return userId || 'Unknown User';
   }
 
-updateSetOptions(): void {
-  // Build global set mappings for consistent numbering
-  this.globalSetMappings.clear();
-  
-  // Process all questions (both accepted and pending) to build complete set mappings
-  this.allQuestionsForSetMapping.forEach(q => {
-    const candidateName = q.assignedTo?.name || q.generatedBy?.name || 'Not Assigned';
-    
-    if (!this.globalSetMappings.has(candidateName)) {
-      this.globalSetMappings.set(candidateName, new Map());
-    }
-    
-    const candidateSets = this.globalSetMappings.get(candidateName)!;
-    
-    if (q.setid && !candidateSets.has(q.setid)) {
-      const setNumber = candidateSets.size + 1;
-      candidateSets.set(q.setid, setNumber);
-    }
-  });
+  updateSetOptions(): void {
+    // Build global set mappings for consistent numbering
+    this.globalSetMappings.clear();
 
-  // Also include pending AI questions in the mapping
-  this.aiQuestions.forEach(q => {
-    const candidateName = q.assignedTo?.name || q.generatedBy?.name || 'Not Assigned';
-    
-    if (!this.globalSetMappings.has(candidateName)) {
-      this.globalSetMappings.set(candidateName, new Map());
-    }
-    
-    const candidateSets = this.globalSetMappings.get(candidateName)!;
-    
-    if (q.setid && !candidateSets.has(q.setid)) {
-      const setNumber = candidateSets.size + 1;
-      candidateSets.set(q.setid, setNumber);
-    }
-  });
+    // Collect all questions with their creation dates
+    const allQuestions = [...this.allQuestionsForSetMapping, ...this.aiQuestions];
 
-  // Calculate maximum sets for dropdown options
-  let maxSets = 0;
-  this.globalSetMappings.forEach(candidateSets => {
-    maxSets = Math.max(maxSets, candidateSets.size);
-  });
+    // Group questions by candidate
+    const candidateQuestions = new Map<string, any[]>();
 
-  this.setOptions = [];
-  for (let i = 1; i <= maxSets; i++) {
-    this.setOptions.push({ number: i, displayName: `Set ${i}` });
+    allQuestions.forEach(q => {
+      const candidateName = q.assignedTo?.name || q.generatedBy?.name || 'Not Assigned';
+
+      if (!candidateQuestions.has(candidateName)) {
+        candidateQuestions.set(candidateName, []);
+      }
+      candidateQuestions.get(candidateName)!.push(q);
+    });
+
+    // Process each candidate's questions to build set mappings
+    candidateQuestions.forEach((questions, candidateName) => {
+      // Determine earliest creation time per set to ensure stable ordering
+      const setEarliestCreatedAt = new Map<string, number>();
+
+      questions.forEach(q => {
+        if (q.setid) {
+          const created = new Date(q.createdAt || 0).getTime();
+          if (!setEarliestCreatedAt.has(q.setid)) {
+            setEarliestCreatedAt.set(q.setid, created);
+          } else {
+            const prev = setEarliestCreatedAt.get(q.setid)!;
+            if (created < prev) {
+              setEarliestCreatedAt.set(q.setid, created);
+            }
+          }
+        }
+      });
+
+      // Sort set IDs by earliest creation date
+      const sortedSetIds = Array.from(setEarliestCreatedAt.keys()).sort((a, b) => {
+        const aDate = setEarliestCreatedAt.get(a) ?? 0;
+        const bDate = setEarliestCreatedAt.get(b) ?? 0;
+
+        // If creation dates are very close (within 1 minute), sort by setid for consistency
+        if (Math.abs(aDate - bDate) < 60000) {
+          return a.localeCompare(b);
+        }
+        return aDate - bDate;
+      });
+
+
+      // Create mapping for this candidate
+      const candidateSetMapping = new Map<string, number>();
+      sortedSetIds.forEach((setid, index) => {
+        candidateSetMapping.set(setid, index + 1);
+      });
+
+      this.globalSetMappings.set(candidateName, candidateSetMapping);
+    });
+
+    // Calculate maximum sets for dropdown options
+    let maxSets = 0;
+    this.globalSetMappings.forEach(candidateSets => {
+      maxSets = Math.max(maxSets, candidateSets.size);
+    });
+
+    this.setOptions = [];
+    for (let i = 1; i <= maxSets; i++) {
+      this.setOptions.push({ number: i, displayName: `Set ${i}` });
+    }
   }
-}
 
   // Filter and search methods - FIXED
   filterQuestions(): void {
     console.log('=== Filter Questions Called ===');
     console.log('selectedSetNumber before:', this.selectedSetNumber);
-    
+
     this.aiCurrentPage = 0;
     this.acceptedCurrentPage = 0;
-    
+
     this.loadAllData();
   }
 
@@ -442,14 +467,14 @@ updateSetOptions(): void {
 
   // Utility methods
   getSetDisplayName(setid: string | undefined, candidateName?: string): string {
-  if (!setid || !candidateName) return 'N/A';
+    if (!setid || !candidateName) return 'N/A';
 
-  const candidateSets = this.globalSetMappings.get(candidateName);
-  if (!candidateSets) return 'Unknown Set';
+    const candidateSets = this.globalSetMappings.get(candidateName);
+    if (!candidateSets) return 'Unknown Set';
 
-  const setNumber = candidateSets.get(setid);
-  return setNumber ? `Set ${setNumber}` : 'Unknown Set';
-}
+    const setNumber = candidateSets.get(setid);
+    return setNumber ? `Set ${setNumber}` : 'Unknown Set';
+  }
 
   showQuestionDetails(question: AIQuestion | AcceptedQuestion): void {
     this.selectedQuestion = question;

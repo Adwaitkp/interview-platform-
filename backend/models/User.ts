@@ -14,6 +14,7 @@ export interface IUser extends Document {
   assignedQuestions?: Map<string, string[]>;
   quizType?: string; 
   assignedSetId?: string;
+  nextAttemptNumber?: number;
 }
 
 const userSchema = new Schema<IUser>({
@@ -35,6 +36,7 @@ const userSchema = new Schema<IUser>({
   },
   quizType: { type: String },
   assignedSetId: { type: String, default: null },
+  nextAttemptNumber: { type: Number, default: 1 },
 }, 
   { timestamps: true } 
 );

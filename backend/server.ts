@@ -22,7 +22,7 @@ const PORT: number = Number(process.env.PORT) || 5000;
 const MONGO_URI: string = process.env.MONGO_URI || 'mongodb://localhost:27017/test';
 
 // ✅ Replace with your actual IP
-const YOUR_LOCAL_IP = '192.168.0.61';
+const YOUR_LOCAL_IP = 'localhost';
 
 // ✅ Allowed CORS origins
 const allowedOrigins = [

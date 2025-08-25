@@ -89,8 +89,7 @@
           <td class="px-4 py-3 cursor-pointer" (click)="showQuestionDetails(q)">{{ q.question }}</td>
           <td class="px-4 py-3">{{ q.correctanswer }}</td>
           <td class="px-4 py-3">{{ q.assignedTo?.name || q.generatedBy?.name || 'Not Assigned' }}</td>
-          <td class="px-4 py-3">{{ getSetDisplayName(q.setid || '', q.assignedTo?.name || q.generatedBy?.name ||
-            'NotAssigned') }}</td>
+          <td class="px-4 py-3">{{ getSetDisplayName(q.setid || '', q.assignedTo?.name || q.generatedBy?.name || 'Not Assigned') }}</td>
           <td class="px-4 py-3 flex items-center justify-center gap-2">
             <button (click)="approveQuestion(q._id)"
               class="text-green-600 hover:text-green-900 transition-colors duration-200 flex items-center">

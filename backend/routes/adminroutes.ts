@@ -226,27 +226,38 @@ router.patch('/users/retest/:id', isAdmin, async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
     
+    // Get the highest attempt number for this user to set the next attempt
+    const [lastResult, lastAIResult] = await Promise.all([
+      Result.findOne({ userEmail: user.email }).sort({ attemptNumber: -1 }),
+      AIResult.findOne({ userEmail: user.email }).sort({ attemptNumber: -1 })
+    ]);
+    
+    const nextAttemptNumber = Math.max(
+      (lastResult?.attemptNumber || 0),
+      (lastAIResult?.attemptNumber || 0)
+    ) + 1;
+    
     // Reset quiz-related fields but preserve question counts
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       { 
         quizCompleted: false,
         aiQuizCompleted: false,
-        assignedQuestions: {}
+        assignedQuestions: {},
+        nextAttemptNumber: nextAttemptNumber
         // Keep questionCounts as they were - don't reset to null
+        // Keep all previous quiz results - DO NOT DELETE
       },
       { new: true }
     ).select('-password');
     
-    // Delete existing quiz results for this user
-    const deletedResults = await Result.deleteMany({ userEmail: user.email });
-    const deletedAIResults = await AIResult.deleteMany({ userEmail: user.email });
-    
-
+    // DO NOT DELETE existing quiz results - preserve them for history
+    // Previous results will remain with their original attemptNumber and isRetest flags
     
     res.status(200).json({ 
-      message: 'Quiz reset successfully',
-      deletedResults: deletedResults.deletedCount + deletedAIResults.deletedCount
+      message: 'Quiz reset successfully - previous attempts preserved',
+      nextAttemptNumber: nextAttemptNumber,
+      preservedResults: true
     });
   } catch (error) {
     console.error('Error resetting quiz:', error);

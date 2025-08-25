@@ -407,4 +407,26 @@
       </div>
     </div>
   </div>
+
+  <!-- Retest Confirmation Modal -->
+  <div *ngIf="showRetestModal" class="custom-dialog">
+    <div class="relative top-45 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+      <div class="mt-0">
+        <h3 class="text-lg font-medium text-black mt-3">Retest</h3>
+        <div class="mt-6">
+          <p class="text-sm text-gray-500 text-center">Are you sure you want to reset the quiz for {{ selectedRetestResult?.name }}?</p>
+        </div>
+        <div class="flex gap-3 justify-end mt-6">
+          <button (click)="handleRetestModalAction(true)"
+            class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-200">
+            Yes
+          </button>
+          <button (click)="handleRetestModalAction(false)"
+            class="px-4 py-2 bg-gray-300 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors duration-200">
+            No
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>

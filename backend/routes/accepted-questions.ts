@@ -9,19 +9,19 @@ const router = express.Router();
 router.get('/', isAdmin, async (req: Request, res: Response) => {
   try {
     const { skill, level, limit, candidateName, page, search, setNumber } = req.query;
-    
+
     let filter: any = { reviewStatus: 'approved' };
-    
+
     if (skill) filter.skill = new RegExp('^' + skill + '$', 'i');
     if (level) filter.level = new RegExp('^' + level + '$', 'i');
-    
+
     // If candidateName is provided, find the user first
     if (candidateName) {
       const users = await User.find({
         name: new RegExp(candidateName as string, 'i'),
         role: 'interviewee'
       }).select('_id');
-      
+
       const userIds = users.map(user => user._id);
       if (userIds.length > 0) {
         filter.assignedTo = { $in: userIds };
@@ -41,74 +41,72 @@ router.get('/', isAdmin, async (req: Request, res: Response) => {
     // Parse pagination parameters
     const pageNum = parseInt(page as string, 10) || 0;
     const limitNum = parseInt(limit as string, 10) || 10;
-    
-    // First, get all questions matching the current filter (without setNumber filter)
-    // Remove the explicit type annotation to let TypeScript infer the type
-    let allQuestions = await AIQuestions.find(filter)
-      .populate('assignedTo', 'name')
-      .populate('generatedBy', 'name')
-      .sort({ createdAt: -1 });
 
-    // If setNumber filter is applied, filter by set number logic
+
+    // If setNumber filter is applied, use the same logic as the AI questions route for consistency
     if (setNumber) {
-      const targetSetNumber = parseInt(setNumber as string, 10);
-      
-      // Group questions by candidate and determine set numbers
-      const candidateQuestions = new Map();
-      
-      allQuestions.forEach(question => {
-        // Handle populated fields safely
-        const assignedToName = question.assignedTo && typeof question.assignedTo === 'object' && 'name' in question.assignedTo 
-          ? (question.assignedTo as any).name 
-          : null;
-        const generatedByName = question.generatedBy && typeof question.generatedBy === 'object' && 'name' in question.generatedBy 
-          ? (question.generatedBy as any).name 
-          : null;
-        
-        const candidateName = assignedToName || generatedByName || 'Not Assigned';
-        
-        if (!candidateQuestions.has(candidateName)) {
-          candidateQuestions.set(candidateName, []);
-        }
-        candidateQuestions.get(candidateName)!.push(question);
-      });
+      const setNumberInt = parseInt(setNumber as string);
+      if (setNumberInt > 0) {
+        // Use a separate query to get all questions for accurate set mapping, ignoring existing filters
+        const allQuestionsForSetMapping = await AIQuestions.find()
+          .populate('generatedBy', 'name')
+          .populate('assignedTo', 'name');
 
-      // Filter questions that belong to the target set number
-      const filteredQuestions: any[] = [];
-      
-      candidateQuestions.forEach((questions, candidateName) => {
-        // Group by setid and sort to get consistent set numbering
-        const setGroups = new Map();
-        
-        questions.forEach((q: any) => {
-          if (q.setid) {
-            if (!setGroups.has(q.setid)) {
-              setGroups.set(q.setid, []);
-            }
-            setGroups.get(q.setid)!.push(q);
+        const candidateSets = new Map<string, Map<string, Date>>();
+        allQuestionsForSetMapping.forEach((q: any) => {
+          const generatedByName = (q.generatedBy && typeof q.generatedBy === 'object' && 'name' in q.generatedBy) ? q.generatedBy.name : '';
+          const assignedToName = (q.assignedTo && typeof q.assignedTo === 'object' && 'name' in q.assignedTo) ? q.assignedTo.name : '';
+          const candidateName = generatedByName || assignedToName || 'Not Assigned';
+
+          if (!candidateSets.has(candidateName)) {
+            candidateSets.set(candidateName, new Map<string, Date>());
+          }
+
+          const setMap = candidateSets.get(candidateName)!;
+          if (q.setid && !setMap.has(q.setid)) {
+            setMap.set(q.setid, q.createdAt);
           }
         });
 
-        // Sort setids to ensure consistent ordering
-        const sortedSetIds = Array.from(setGroups.keys()).sort();
-        
-        // Check if this candidate has the target set number
-        if (sortedSetIds.length >= targetSetNumber) {
-          const targetSetId = sortedSetIds[targetSetNumber - 1];
-          const targetSetQuestions = setGroups.get(targetSetId) || [];
-          filteredQuestions.push(...targetSetQuestions);
-        }
-      });
+        const matchingSetIds: string[] = [];
+        candidateSets.forEach(setMap => {
+          const entries = Array.from(setMap.entries());
+          const sortedSetIds = entries
+            .sort((a, b) => {
+              const aDate = new Date(a[1]).getTime();
+              const bDate = new Date(b[1]).getTime();
+              // If creation dates are very close (within 1 minute), sort by setid for consistency
+              if (Math.abs(aDate - bDate) < 60000) {
+                return a[0].localeCompare(b[0]);
+              }
+              return aDate - bDate;
+            })
+            .map(entry => entry[0]);
 
-      allQuestions = filteredQuestions;
+          if (sortedSetIds[setNumberInt - 1]) {
+            matchingSetIds.push(sortedSetIds[setNumberInt - 1]);
+          }
+        });
+
+        if (matchingSetIds.length > 0) {
+          filter.setid = { $in: matchingSetIds };
+        } else {
+          // If no sets match, return no results
+          filter._id = { $in: [] };
+        }
+      }
     }
 
-    // Calculate pagination after filtering
-    const total = allQuestions.length;
-    const paginatedQuestions = allQuestions.slice(
-      pageNum * limitNum,
-      (pageNum + 1) * limitNum
-    );
+    // Get the count of documents that match the filter
+    const total = await AIQuestions.countDocuments(filter);
+
+    // Get the paginated questions based on the final filter
+    const paginatedQuestions = await AIQuestions.find(filter)
+      .populate('assignedTo', 'name')
+      .populate('generatedBy', 'name')
+      .sort({ createdAt: -1 })
+      .skip(pageNum * limitNum)
+      .limit(limitNum);
 
     res.status(200).json({
       questions: paginatedQuestions,
@@ -116,6 +114,7 @@ router.get('/', isAdmin, async (req: Request, res: Response) => {
       currentPage: pageNum,
       totalQuestions: total
     });
+
 
   } catch (error: any) {
     console.error('Error fetching approved AI questions:', error.message || error);

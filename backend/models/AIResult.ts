@@ -37,6 +37,8 @@ export interface IAIResult extends Document {
   questionResponses: IAIQuestionResponse[];
   skillLevelSummaries: IAISkillLevelSummary[];
   aiQuizCompleted: boolean;
+  attemptNumber: number;
+  isRetest: boolean;
 }
 
 const aiQuestionResponseSchema = new Schema({
@@ -72,7 +74,9 @@ const aiResultSchema = new Schema<IAIResult>({
   overallPercentage: { type: Number, required: true },
   questionResponses: [aiQuestionResponseSchema],
   skillLevelSummaries: [aiSkillLevelSummarySchema],
-  aiQuizCompleted: { type: Boolean, default: true }
+  aiQuizCompleted: { type: Boolean, default: true },
+  attemptNumber: { type: Number, required: true, default: 1 },
+  isRetest: { type: Boolean, required: true, default: false }
 }, { timestamps: true });
 
 // Index for better query performance

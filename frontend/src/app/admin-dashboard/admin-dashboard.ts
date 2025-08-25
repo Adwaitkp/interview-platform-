@@ -92,6 +92,10 @@ export class AdminDashboardComponent implements OnInit {
   selectedNormalQuizQuestions: any[] = [];
   selectedNormalQuizSkillLevel: string = '';
 
+  // Retest Modal properties
+  showRetestModal: boolean = false;
+  selectedRetestResult: QuizResult | null = null;
+
   currentPage: number = 0;
   pageSize: number = 10;
 
@@ -363,8 +367,23 @@ export class AdminDashboardComponent implements OnInit {
       }
     }
 
-    if (confirm(`Are you sure you want to reset the quiz for ${result.name}? They will be able to take the quiz again with different questions.`)) {
-      this.resettingQuizIds.add(result.userId);
+    // Show retest confirmation modal instead of browser confirm
+    this.selectedRetestResult = result;
+    this.showRetestModal = true;
+  }
+
+  isResettingQuiz(userId: string): boolean {
+    return this.resettingQuizIds.has(userId);
+  }
+
+  // Retest Modal methods
+  async handleRetestModalAction(confirm: boolean): Promise<void> {
+    this.showRetestModal = false;
+    
+    if (confirm && this.selectedRetestResult) {
+      const result = this.selectedRetestResult;
+      this.resettingQuizIds.add(result.userId!);
+      
       try {
         const token = localStorage.getItem('token');
         const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
@@ -373,20 +392,17 @@ export class AdminDashboardComponent implements OnInit {
           {},
           { headers }
         ));
-        alert(`Quiz reset successfully! The user can now retake the quiz with completely new questions. (Deleted ${response.deletedResults} previous results)`);
-        // Refresh the data to show updated results
+        
         this.loadResults();
       } catch (error) {
         console.error('Error resetting quiz:', error);
         alert('Failed to reset quiz. Please try again.');
       } finally {
-        this.resettingQuizIds.delete(result.userId);
+        this.resettingQuizIds.delete(result.userId!);
       }
     }
-  }
-
-  isResettingQuiz(userId: string): boolean {
-    return this.resettingQuizIds.has(userId);
+    
+    this.selectedRetestResult = null;
   }
 
   // AI Summary Modal methods

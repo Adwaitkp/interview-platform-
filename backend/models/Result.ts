@@ -36,6 +36,8 @@ export interface IResult extends Document {
   overallPercentage: number;
   questionResponses: IQuestionResponse[];
   skillLevelSummaries: ISkillLevelSummary[];
+  attemptNumber: number;
+  isRetest: boolean;
 }
 
 const questionResponseSchema = new Schema({
@@ -70,7 +72,9 @@ const resultSchema = new Schema<IResult>({
   totalIncorrect: { type: Number, required: true },
   overallPercentage: { type: Number, required: true },
   questionResponses: [questionResponseSchema],
-  skillLevelSummaries: [skillLevelSummarySchema]
+  skillLevelSummaries: [skillLevelSummarySchema],
+  attemptNumber: { type: Number, required: true, default: 1 },
+  isRetest: { type: Boolean, required: true, default: false }
 }, { timestamps: true });
 
 // Index for better query performance

@@ -85,6 +85,10 @@ router.post('/submit', async (req: Request, res: Response) => {
     const totalQuestions = totalCorrect + totalIncorrect;
     const overallPercentage = totalQuestions > 0 ? Math.round((totalCorrect / totalQuestions) * 100) : 0;
 
+    // Get the current attempt number for this user
+    const currentAttemptNumber = user.nextAttemptNumber || 1;
+    const isRetest = currentAttemptNumber > 1;
+
     // Create new result document
     const result = new Result({
       userId: userIdObj,
@@ -95,13 +99,18 @@ router.post('/submit', async (req: Request, res: Response) => {
       totalIncorrect,
       overallPercentage,
       questionResponses,
-      skillLevelSummaries
+      skillLevelSummaries,
+      attemptNumber: currentAttemptNumber,
+      isRetest: isRetest
     });
 
     await result.save();
 
-    // Mark user as having completed the quiz
-    await User.findByIdAndUpdate(userIdObj, { quizCompleted: true });
+    // Mark user as having completed the quiz and increment attempt number for next time
+    await User.findByIdAndUpdate(userIdObj, { 
+      quizCompleted: true,
+      nextAttemptNumber: currentAttemptNumber + 1
+    });
 
     res.json({ 
       message: 'Result saved successfully',

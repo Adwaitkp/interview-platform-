@@ -121,19 +121,48 @@ Return only this exact JSON format:
 
 // Generate AI questions based on admin selection
 router.post('/generate-ai-questions', isAdmin, async (req: CustomRequest, res: Response) => {
-  const { skillLevels, generatedBy, setid, useExistingSet } = req.body;
-  // Determine which setid to use
+  const { skillLevels, generatedBy, setid, useExistingSet, targetSetNumber } = req.body;
+
   let effectiveSetId: string;
-  if (!setid || useExistingSet === false) {
-    // No set id provided, or admin chose to start a new set: generate a new one
-    effectiveSetId = uuidv4();
-  } else {
-    // Admin wants to add to an existing set: use provided setid
+
+  
+  if (useExistingSet === true && setid) {
+    
     effectiveSetId = setid;
+  } else if (useExistingSet === true && targetSetNumber) { 
+
+    const existingQuestions = await AIQuestions.find({
+      $or: [{ generatedBy }, { assignedTo: generatedBy }]
+    }).populate('generatedBy', 'name').populate('assignedTo', 'name');
+
+    const setGroups = new Map();
+    existingQuestions.forEach(q => {
+      if (q.setid) {
+        if (!setGroups.has(q.setid)) {
+          setGroups.set(q.setid, []);
+        }
+        setGroups.get(q.setid).push(q);
+      }
+    });
+
+    const sortedSetIds = Array.from(setGroups.keys()).sort((a, b) => {
+      const aFirstQuestion = setGroups.get(a)[0];
+      const bFirstQuestion = setGroups.get(b)[0];
+      return new Date(aFirstQuestion.createdAt).getTime() - new Date(bFirstQuestion.createdAt).getTime();
+    });
+
+    if (sortedSetIds.length >= targetSetNumber) {
+      effectiveSetId = sortedSetIds[targetSetNumber - 1];
+    } else {
+      effectiveSetId = uuidv4();
+    }
+  } else {
+    // Create new set
+    console.log('🔧 Creating new set');
+    effectiveSetId = uuidv4();
   }
 
   try {
-
     if (!skillLevels || !Array.isArray(skillLevels) || !generatedBy) {
       return res.status(400).json({ message: 'Missing required fields: skillLevels array and generatedBy' });
     }
@@ -161,11 +190,12 @@ router.post('/generate-ai-questions', isAdmin, async (req: CustomRequest, res: R
             source: 'AI',
             generatedBy,
             questionCount: count,
-            setid: effectiveSetId
+            setid: effectiveSetId 
           });
 
           await aiQuestion.save();
           generatedQuestions.push(aiQuestion);
+
         }
       } catch (error) {
         console.error(`Error generating questions for ${skill} ${level}:`, error);
@@ -179,7 +209,8 @@ router.post('/generate-ai-questions', isAdmin, async (req: CustomRequest, res: R
     res.json({
       message: 'AI questions generated successfully',
       count: generatedQuestions.length,
-      questions: generatedQuestions
+      questions: generatedQuestions,
+      setid: effectiveSetId 
     });
   } catch (error) {
     console.error('Error generating AI questions:', error);
@@ -187,7 +218,6 @@ router.post('/generate-ai-questions', isAdmin, async (req: CustomRequest, res: R
   }
 });
 
-// Get existing sets for a user
 router.get('/user-sets/:userId', isAdmin, async (req: CustomRequest, res: Response) => {
   try {
     const { userId } = req.params;
@@ -207,10 +237,10 @@ router.get('/user-sets/:userId', isAdmin, async (req: CustomRequest, res: Respon
 router.get('/all-ai-questions', isAdmin, async (req: CustomRequest, res: Response) => {
   try {
     const { generatedBy, reviewStatus, skill, level, excludeApproved, search, page, limit, candidateName, setNumber } = req.query;
-    
+
     const candidateNameStr = candidateName as string;
     const query: any = {};
-    
+
     if (generatedBy) {
       query.generatedBy = generatedBy;
     }
@@ -251,27 +281,61 @@ router.get('/all-ai-questions', isAdmin, async (req: CustomRequest, res: Respons
         const allQuestionsForSetMapping = await AIQuestions.find()
           .populate('generatedBy', 'name')
           .populate('assignedTo', 'name');
-          
-        const candidateSets = new Map();
+
+        // First, get all unique candidates and their sets with creation dates
+        const candidateSets = new Map<string, Map<string, Date>>();
+        const setToCandidateMap = new Map<string, string>();
+
+        // First pass: Collect all sets and their creation dates per candidate
         allQuestionsForSetMapping.forEach((q: any) => {
-          // Fixed type checking
           const generatedByName = (q.generatedBy && typeof q.generatedBy === 'object' && 'name' in q.generatedBy) ? q.generatedBy.name : '';
           const assignedToName = (q.assignedTo && typeof q.assignedTo === 'object' && 'name' in q.assignedTo) ? q.assignedTo.name : '';
           const candidateName = generatedByName || assignedToName || 'Not Assigned';
-          
+
           if (!candidateSets.has(candidateName)) {
-            candidateSets.set(candidateName, []);
+            candidateSets.set(candidateName, new Map<string, Date>());
           }
-          if (q.setid && !candidateSets.get(candidateName).includes(q.setid)) {
-            candidateSets.get(candidateName).push(q.setid);
+
+          if (q.setid) {
+            const candidateSet = candidateSets.get(candidateName)!;
+            const currentDate = new Date(q.createdAt);
+            // Only update the creation time if this is an earlier date
+            if (!candidateSet.has(q.setid) ||
+              currentDate < new Date(candidateSet.get(q.setid)!)) {
+              candidateSet.set(q.setid, currentDate);
+            }
+            // Map setid to candidate for later filtering
+            setToCandidateMap.set(q.setid, candidateName);
           }
         });
 
+        // Create a map of candidate to their set IDs sorted by creation date
+        const candidateToSortedSetIds = new Map<string, string[]>();
+        candidateSets.forEach((setMap: Map<string, Date>, candidateName: string) => {
+          const sortedSets = Array.from(setMap.entries())
+            .sort((a, b) => {
+              const aDate = a[1].getTime();
+              const bDate = b[1].getTime();
+              // If creation dates are very close (within 1 minute), sort by setid for consistency
+              if (Math.abs(aDate - bDate) < 60000) {
+                return a[0].localeCompare(b[0]);
+              }
+              return aDate - bDate;
+            })
+            .map(entry => entry[0]);
+
+
+          candidateToSortedSetIds.set(candidateName, sortedSets);
+        });
+
+        // Find all set IDs that match the requested set number
         const matchingSetIds: string[] = [];
-        candidateSets.forEach(sets => {
-          sets.sort();
-          if (sets[setNumberInt - 1]) {
-            matchingSetIds.push(sets[setNumberInt - 1]);
+        candidateToSortedSetIds.forEach((setIds, candidateName) => {
+          if (setNumberInt > 0 && setNumberInt <= setIds.length) {
+            const targetSetId = setIds[setNumberInt - 1];
+            if (targetSetId) {
+              matchingSetIds.push(targetSetId);
+            }
           }
         });
 
@@ -297,14 +361,14 @@ router.get('/all-ai-questions', isAdmin, async (req: CustomRequest, res: Respons
         .populate('generatedBy', 'name')
         .populate('assignedTo', 'name')
         .sort({ createdAt: -1 });
-      
+
       // Filter by candidate name with fixed type checking
       const filteredQuestions = allQuestions.filter((q: any) => {
         const generatedByName = (q.generatedBy && typeof q.generatedBy === 'object' && 'name' in q.generatedBy) ? q.generatedBy.name : '';
         const assignedToName = (q.assignedTo && typeof q.assignedTo === 'object' && 'name' in q.assignedTo) ? q.assignedTo.name : '';
-        
+
         return (generatedByName && generatedByName.toLowerCase().includes(candidateNameStr.toLowerCase())) ||
-               (assignedToName && assignedToName.toLowerCase().includes(candidateNameStr.toLowerCase()));
+          (assignedToName && assignedToName.toLowerCase().includes(candidateNameStr.toLowerCase()));
       });
 
       // Apply pagination to filtered results
@@ -328,7 +392,7 @@ router.get('/all-ai-questions', isAdmin, async (req: CustomRequest, res: Respons
           .populate('generatedBy', 'name')
           .populate('assignedTo', 'name')
           .sort({ createdAt: -1 });
-        
+
         res.json(questions);
         return;
       } else {
@@ -352,7 +416,7 @@ router.get('/all-ai-questions', isAdmin, async (req: CustomRequest, res: Respons
       currentPage: pageNum,
       totalQuestions
     });
-    
+
   } catch (error) {
     console.error('Error fetching AI questions:', error);
     res.status(500).json({ message: 'Server error' });

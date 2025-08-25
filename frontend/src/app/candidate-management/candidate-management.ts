@@ -548,19 +548,28 @@ export class CandidateManagement implements OnInit {
     this.showAITestModal = true;
   }
   continueWithSet() {
-    this.useExistingSet = true;
-    this.showSetChoiceModal = false;
+  this.useExistingSet = true;
+  this.showSetChoiceModal = false;
 
-    // Initialize skillLevels for the AI Test Modal
-    const userSkills = Array.isArray(this.selectedUserForAI.skill)
-      ? this.selectedUserForAI.skill
-      : (this.selectedUserForAI.skill ? [this.selectedUserForAI.skill] : []);
-    const userLevels = Array.isArray(this.selectedUserForAI.level)
-      ? this.selectedUserForAI.level
-      : (this.selectedUserForAI.level ? [this.selectedUserForAI.level] : []);
-
-    this.initializeSkillLevelsAndShowModal(userSkills, userLevels);
+  // 🔧 FIX: Ensure selectedSetId is properly validated
+  if (!this.selectedSetId) {
+    alert('Please select a set first');
+    this.showSetChoiceModal = true;
+    return;
   }
+
+  console.log('🔧 Continue with set - selectedSetId:', this.selectedSetId);
+
+  // Initialize skillLevels for the AI Test Modal
+  const userSkills = Array.isArray(this.selectedUserForAI.skill)
+    ? this.selectedUserForAI.skill
+    : (this.selectedUserForAI.skill ? [this.selectedUserForAI.skill] : []);
+  const userLevels = Array.isArray(this.selectedUserForAI.level)
+    ? this.selectedUserForAI.level
+    : (this.selectedUserForAI.level ? [this.selectedUserForAI.level] : []);
+
+  this.initializeSkillLevelsAndShowModal(userSkills, userLevels);
+}
   createNewSet() {
     this.useExistingSet = false;
     this.selectedSetId = '';
@@ -617,39 +626,58 @@ export class CandidateManagement implements OnInit {
     return this.skillLevels.every(sl => sl.skill && sl.level && sl.count > 0);
   }
 
-  // MAIN FIX: generateAIQuestions method - GUARANTEED TO WORK
+  
   async generateAIQuestions(): Promise<void> {
-    if (!this.isAITestFormValid() || !this.selectedUserForAI) {
-      return;
-    }
-    this.isGeneratingAIQuestions = true;
-    try {
-      const token = localStorage.getItem('token');
-      const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
-      const payload: any = {
-        skillLevels: this.skillLevels,
-        generatedBy: this.selectedUserForAI._id,
-        useExistingSet: this.useExistingSet
-      };
-      if (this.useExistingSet && this.selectedSetId) {
-        payload.setid = this.selectedSetId;
-      }
-      await this.http.post(`${environment.apiUrl}/ai-quiz/generate-ai-questions`, payload, { headers }).toPromise();
-      await this.assignQuizType(this.selectedUserForAI._id, 'ai');
-      this.showAITestModal = false;
-      this.selectedUserForAI = null;
-      this.skillLevels = [];
-      this.isGeneratingAIQuestions = false;
-      this.cdr.detectChanges();
-      this.showSuccessModal = true;
-      this.cdr.detectChanges();
-      this.getAllUsers();
-    } catch (error) {
-      this.isGeneratingAIQuestions = false;
-      this.cdr.detectChanges();
-      alert('Failed to generate AI questions. Please try again.');
-    }
+  if (!this.isAITestFormValid() || !this.selectedUserForAI) {
+    return;
   }
+  
+  this.isGeneratingAIQuestions = true;
+  
+  try {
+    const token = localStorage.getItem('token');
+    const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
+    
+    const payload: any = {
+      skillLevels: this.skillLevels,
+      generatedBy: this.selectedUserForAI._id,
+      useExistingSet: this.useExistingSet
+    };
+
+    // 🔧 FIX: Properly pass the selectedSetId when using existing set
+    if (this.useExistingSet && this.selectedSetId) {
+      payload.setid = this.selectedSetId;
+      console.log('🔧 Using existing set:', this.selectedSetId);
+    }
+
+    // 🔍 DEBUG: Log the payload being sent
+    console.log('=== PAYLOAD BEING SENT ===');
+    console.log('useExistingSet:', this.useExistingSet);
+    console.log('selectedSetId:', this.selectedSetId);
+    console.log('Full payload:', payload);
+    console.log('==========================');
+    
+    await this.http.post(`${environment.apiUrl}/ai-quiz/generate-ai-questions`, payload, { headers }).toPromise();
+    
+    await this.assignQuizType(this.selectedUserForAI._id, 'ai');
+    
+    this.showAITestModal = false;
+    this.selectedUserForAI = null;
+    this.skillLevels = [];
+    this.isGeneratingAIQuestions = false;
+    this.cdr.detectChanges();
+    
+    this.showSuccessModal = true;
+    this.cdr.detectChanges();
+    
+    this.getAllUsers();
+  } catch (error) {
+    console.error('Error generating AI questions:', error);
+    this.isGeneratingAIQuestions = false;
+    this.cdr.detectChanges();
+    alert('Failed to generate AI questions. Please try again.');
+  }
+}
 
 
   // handleSuccessModalAction method
