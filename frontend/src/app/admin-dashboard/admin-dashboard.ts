@@ -1,67 +1,9 @@
 import { Component, OnInit } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { environment } from '../../environments/environment';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { firstValueFrom } from 'rxjs';
-
-interface QuestionResponse {
-  questionId: string;
-  question: string;
-  skill: string;
-  level: string;
-  userAnswer: string;
-  correctanswer: string;
-  isCorrect: boolean;
-  options: {
-    a: string;
-    b: string;
-    c: string;
-    d: string;
-  };
-}
-
-interface SkillLevelSummary {
-  skill: string;
-  level: string;
-  totalQuestions: number;
-  correctAnswers: number;
-}
-
-interface QuizResult {
-  _id: string;
-  name: string;
-  email: string;
-  totalMarks: number;
-  totalQuestions: number;
-  overallPercentage: number;
-  skillResults: SkillLevelSummary[];
-  questionResponses?: QuestionResponse[];
-  quizDate?: string | Date;
-  userId?: string;
-  aiScore?: {
-    totalMarks: number;
-    totalQuestions: number;
-    overallPercentage: number;
-    skillLevelSummaries?: Array<{
-      skill: string;
-      level: string;
-      totalQuestions: number;
-      correctAnswers: number;
-    }>;
-  };
-}
-
-interface User {
-  _id: string;
-  name: string;
-  email: string;
-  role: string;
-  skill?: string[];
-  level?: string;
-  questionCounts?: { [skill: string]: { [level: string]: number } };
-}
+import { AdminService } from '../services/admin.service';
+import { QuizResult, User, QuestionResponse } from '../models/admin.models';
 
 @Component({
   selector: 'app-admin-dashboard',
@@ -130,7 +72,7 @@ export class AdminDashboardComponent implements OnInit {
     this.loadResults();
   }
 
-  constructor(private http: HttpClient, private router: Router) { }
+  constructor(private adminService: AdminService, private router: Router) { }
 
   async ngOnInit(): Promise<void> {
     const token = localStorage.getItem('token');
@@ -139,7 +81,6 @@ export class AdminDashboardComponent implements OnInit {
       return;
     }
 
-    // Load users first, then load results
     // Load users first, then load results
     try {
       await this.loadUsers();
@@ -152,51 +93,12 @@ export class AdminDashboardComponent implements OnInit {
   }
 
   async loadUsers(): Promise<void> {
-  try {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      console.error('No token found');
-      return;
+    try {
+      this.users = await this.adminService.getUsers();
+    } catch (error) {
+      console.error('Error loading users:', error);
     }
-
-    const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
-    console.log('Loading users from:', `${environment.apiUrl}/admin/users`); // Debug log
-    
-    const response = await firstValueFrom(
-      this.http.get<any>(`${environment.apiUrl}/admin/users`, { headers })
-    );
-
-    console.log('Raw users response:', response); // Debug log
-
-    // Handle different response structures
-    let users = [];
-    if (Array.isArray(response)) {
-      users = response;
-    } else if (response?.data && Array.isArray(response.data)) {
-      users = response.data;
-    } else if (response?.users && Array.isArray(response.users)) {
-      users = response.users;
-    } else if (response && typeof response === 'object') {
-      // Try to find any array property in the response
-      const arrayProps = Object.keys(response).filter(key => Array.isArray(response[key]));
-      if (arrayProps.length > 0) {
-        users = response[arrayProps[0]];
-      }
-    }
-
-    console.log('Processed users array:', users); // Debug log
-
-    // Keep only interviewees (non-admin users)
-    this.users = users.filter((u: any) => u.role !== 'admin');
-    
-    console.log('Filtered users (non-admin):', this.users); // Debug log
-
-  } catch (error) {
-    console.error('Error loading users:', error);
-    console.error('Error details:', error);
   }
-}
-
 
   async loadResults(): Promise<void> {
     this.loading = true;
@@ -204,31 +106,17 @@ export class AdminDashboardComponent implements OnInit {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
-
-      // Fetch paginated and filtered quiz results and AI results in parallel
-      const [quizResponse, aiResponse] = await Promise.all([
-        firstValueFrom(this.http.get<any>(
-          `${environment.apiUrl}/quiz/results?page=${this.currentPage}&limit=${this.pageSize}&search=${this.searchTerm}`,
-          { headers }
-        )),
-        firstValueFrom(this.http.get<any>(
-          `${environment.apiUrl}/ai-quiz/ai-results?page=${this.currentPage}&limit=${this.pageSize}&search=${this.searchTerm}`,
-          { headers }
-        ))
+      const [quizData, aiData] = await Promise.all([
+        this.adminService.getResults(this.currentPage, this.pageSize, this.searchTerm),
+        this.adminService.getAIResults(this.currentPage, this.pageSize, this.searchTerm)
       ]);
-      console.log('Quiz Response:', quizResponse); // ← ADD this line
-      console.log('AI Response:', aiResponse);
 
-      // Extract results and pagination data from quiz response
-      const quizResults = quizResponse.results || [];
-      this.totalPages = Math.max(quizResponse.totalPages || 0, aiResponse.totalPages || 0);
-      this.currentPage = quizResponse.currentPage || aiResponse.currentPage || 0;
-      this.totalResults = (quizResponse.totalResults || 0) + (aiResponse.totalResults || 0);
+      const { quizResults, totalPages: quizTotalPages, currentPage: quizCurrentPage, totalResults: quizTotalResults } = quizData;
+      const { aiResults, totalPages: aiTotalPages, currentPage: aiCurrentPage, totalResults: aiTotalResults } = aiData;
 
-
-      // Extract AI results
-      const aiResults = aiResponse.results || [];
+      this.totalPages = Math.max(quizTotalPages, aiTotalPages);
+      this.currentPage = quizCurrentPage || aiCurrentPage || 0;
+      this.totalResults = quizTotalResults + aiTotalResults;
 
       const combinedResults: QuizResult[] = [];
 
@@ -244,12 +132,21 @@ export class AdminDashboardComponent implements OnInit {
         });
       });
 
-      // 2) merge AI results: if user already has a regular result, attach aiScore and prefer AI date,
-      // otherwise add a new entry for AI-only result (with quizDate set)
+      // 2) Add all AI results as separate entries (each retest gets its own row)
       aiResults.forEach((aiResult: any) => {
-        const existingResult = combinedResults.find(r => r.email === aiResult.email);
-        if (existingResult) {
-          existingResult.aiScore = {
+        const user = this.users.find(u => u.email === aiResult.email);
+        console.log('Adding AI result for email:', aiResult.email, 'Found user:', user); // Debug log
+        combinedResults.push({
+          _id: aiResult._id,
+          name: aiResult.name,
+          email: aiResult.email,
+          totalMarks: 0,
+          totalQuestions: 0,
+          overallPercentage: 0,
+          skillResults: [],
+          quizDate: aiResult.quizDate || aiResult.createdAt || null,
+          userId: user?._id || aiResult.userId || '', // Try multiple sources
+          aiScore: {
             totalMarks: aiResult.totalMarks,
             totalQuestions: aiResult.totalQuestions,
             overallPercentage: aiResult.overallPercentage,
@@ -259,35 +156,8 @@ export class AdminDashboardComponent implements OnInit {
               totalQuestions: s.totalQuestions,
               correctAnswers: s.correctAnswers
             }))
-          };
-          // Prefer AI quiz date if AI exists (overwrites normal quiz date)
-          existingResult.quizDate = aiResult.quizDate || aiResult.createdAt || existingResult.quizDate;
-        } else {
-          const user = this.users.find(u => u.email === aiResult.email);
-          console.log('Finding user for AI email:', aiResult.email, 'Found user:', user); // Debug log
-          combinedResults.push({
-            _id: aiResult._id,
-            name: aiResult.name,
-            email: aiResult.email,
-            totalMarks: 0,
-            totalQuestions: 0,
-            overallPercentage: 0,
-            skillResults: [],
-            quizDate: aiResult.quizDate || aiResult.createdAt || null,
-            userId: user?._id || aiResult.userId || '', // Try multiple sources
-            aiScore: {
-              totalMarks: aiResult.totalMarks,
-              totalQuestions: aiResult.totalQuestions,
-              overallPercentage: aiResult.overallPercentage,
-              skillLevelSummaries: aiResult.skillResults?.map((s: any) => ({
-                skill: s.skill,
-                level: s.level,
-                totalQuestions: s.totalQuestions,
-                correctAnswers: s.correctAnswers
-              }))
-            }
-          });
-        }
+          }
+        });
       });
 
       // assign results
@@ -313,12 +183,7 @@ export class AdminDashboardComponent implements OnInit {
     // If we don't have question responses, fetch them
     if (!result.questionResponses) {
       try {
-        const token = localStorage.getItem('token');
-        const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
-        const detailedResult = await firstValueFrom(this.http.get<any>(
-          `${environment.apiUrl}/quiz/result/${result._id}`,
-          { headers }
-        ));
+        const detailedResult = await this.adminService.getDetailedResult(result._id);
         if (detailedResult) {
           result.questionResponses = detailedResult.questionResponses;
         }
@@ -349,17 +214,12 @@ export class AdminDashboardComponent implements OnInit {
     this.loadResults();
   }
 
-  async resetQuiz(result: QuizResult) {
-    console.log('Reset quiz called for result:', result); // Debug log
-    console.log('User ID:', result.userId); // Debug log
-    console.log('Available users:', this.users); // Debug log
-
+  async resetQuiz(result: QuizResult): Promise<void> {
+    // Ensure we have a userId to reset the quiz
     if (!result.userId) {
-      // Try to find user ID by email as fallback
       const user = this.users.find(u => u.email === result.email);
-      if (user && user._id) {
+      if (user) {
         result.userId = user._id;
-        console.log('Found fallback user ID:', result.userId);
       } else {
         console.error('No user found for email:', result.email);
         alert('User ID not found. Cannot reset quiz.');
@@ -385,13 +245,7 @@ export class AdminDashboardComponent implements OnInit {
       this.resettingQuizIds.add(result.userId!);
       
       try {
-        const token = localStorage.getItem('token');
-        const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
-        const response = await firstValueFrom(this.http.patch<any>(
-          `${environment.apiUrl}/admin/users/retest/${result.userId}`,
-          {},
-          { headers }
-        ));
+        await this.adminService.retestUser(result.userId!);
         
         this.loadResults();
       } catch (error) {
@@ -419,50 +273,12 @@ export class AdminDashboardComponent implements OnInit {
   // AI Questions Modal methods
   async viewAIQuestions(result: QuizResult, skill: string, level: string): Promise<void> {
     try {
-      const token = localStorage.getItem('token');
-      const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
-
-      // First, get all AI results to find the user's AI result
-      const response = await firstValueFrom(
-        this.http.get<any>(`${environment.apiUrl}/ai-quiz/ai-results?page=0&limit=1000`, { headers })
-      );
-
-      // Handle both direct array response and paginated response
-      let aiResults: any[] = [];
-      if (Array.isArray(response)) {
-        aiResults = response;
-      } else if (response?.results && Array.isArray(response.results)) {
-        aiResults = response.results;
-      } else if (response?.data && Array.isArray(response.data)) {
-        aiResults = response.data;
-      }
-
-      // Find result for this user
-      const userAIResult = aiResults.find((aiResult: any) =>
-        aiResult.email === result.email || aiResult.userEmail === result.email
-      );
-
-      if (userAIResult) {
-        // Fetch detailed AI result with question responses
-        const detailedAIResult = await firstValueFrom(
-          this.http.get<any>(`${environment.apiUrl}/ai-quiz/ai-result/${userAIResult._id}`, { headers })
+      const questionResponses = await this.adminService.getAIQuestionsForUser(result.email);
+      if (questionResponses) {
+        this.selectedAIQuizQuestions = questionResponses.filter(
+          (q: any) => q.skill === skill && q.level === level
         );
-
-
-        if (detailedAIResult && detailedAIResult.questionResponses) {
-          // Filter questions by skill and level
-          this.selectedAIQuizQuestions = detailedAIResult.questionResponses.filter(
-            (q: any) => {
-
-              return q.skill === skill && q.level === level;
-            }
-          );
-        } else {
-          console.log('No question responses found in detailed result');
-          this.selectedAIQuizQuestions = [];
-        }
       } else {
-        console.log('No AI result found for this user');
         this.selectedAIQuizQuestions = [];
       }
 
@@ -485,12 +301,7 @@ export class AdminDashboardComponent implements OnInit {
     // If we don't have question responses, fetch them
     if (!result.questionResponses) {
       try {
-        const token = localStorage.getItem('token');
-        const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
-        const detailedResult = await firstValueFrom(this.http.get<any>(
-          `${environment.apiUrl}/quiz/result/${result._id}`,
-          { headers }
-        ));
+        const detailedResult = await this.adminService.getDetailedResult(result._id);
         if (detailedResult) {
           result.questionResponses = detailedResult.questionResponses;
         }

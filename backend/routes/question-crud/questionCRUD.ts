@@ -1,7 +1,6 @@
 import express, { Request, Response } from 'express';
-import { Questions } from "../../models/Questions";
+import { Questions, IQuestion } from "../../models/Questions";
 import isAdmin from '../../middleware/isadmin';
-import { IQuestion } from '../../types/question';
 
 const router = express.Router();
 

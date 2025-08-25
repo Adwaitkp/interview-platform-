@@ -1,28 +1,7 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { environment } from '../../environments/environment';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-
-interface AIQuestion {
-  _id: string;
-  skill: string;
-  level: string;
-  question: string;
-  options: {
-    a: string;
-    b: string;
-    c: string;
-    d: string;
-  };
-  correctanswer: string;
-  reviewStatus: string;
-  source: string;
-  assignedTo?: string;
-  generatedBy: string;
-  questionCount: number;
-  createdAt: string;
-}
+import { AIQuizService, AIQuestion, QuizState } from '../services/ai-quiz.service';
 
 @Component({
   selector: 'app-ai-quiz',
@@ -38,42 +17,34 @@ export class AIQuizComponent implements OnInit, OnDestroy {
   isSubmitting: boolean = false;
   userAnswers: { [questionId: string]: string } = {};
 
-  // Timer related properties
   testStarted: boolean = false;
   timer: number = 0;
   timerInterval: any = null;
   questionTimeMap: { [level: string]: number } = { 'beginner': 90, 'intermediate': 120, 'advanced': 150 };
   questionTimers: { [key: string]: number } = {};
   lockedQuestions: { [key: string]: boolean } = {};
-  alreadyAttempted: boolean = false;
-  skills: string[] = [];
-  levels: string[] = [];
   loading = false;
 
-  constructor(private http: HttpClient, private cdr: ChangeDetectorRef) { }
+  constructor(private aiQuizService: AIQuizService, private cdr: ChangeDetectorRef) { }
 
   ngOnInit(): void {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      window.location.href = '/login';
-      return;
-    }
-
-    this.http.get(`${environment.apiUrl}/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` }
-    }).subscribe({
-      next: (userData: any) => {
-        if (userData.quizType !== 'ai') {
-          alert('No AI quiz assigned. Please contact your administrator.');
-          window.location.href = '/';
-          return;
-        }
-        this.restoreQuizState();
-        this.loadUserQuestionCounts();
-      },
-      error: () => {
+    this.aiQuizService.getUserData().subscribe(userData => {
+      if (!userData) {
         window.location.href = '/login';
+        return;
       }
+      if (userData.quizType !== 'ai') {
+        alert('No AI quiz assigned. Please contact your administrator.');
+        window.location.href = '/';
+        return;
+      }
+
+      const restoredState = this.aiQuizService.restoreQuizState();
+      this.applyState(restoredState);
+      // Database state takes priority over localStorage for quiz completion
+      this.quizCompleted = userData.aiQuizCompleted === true;
+
+      this.loadQuestions();
     });
   }
 
@@ -81,142 +52,55 @@ export class AIQuizComponent implements OnInit, OnDestroy {
     this.clearTimer();
   }
 
-  private restoreQuizState() {
-    const savedTimers = localStorage.getItem('aiQuestionTimers');
-    const savedIndex = localStorage.getItem('aiCurrentQuestionIndex');
-    const savedLocked = localStorage.getItem('aiLockedQuestions');
-    const savedUserAnswers = localStorage.getItem('aiUserAnswers');
-    const savedTestStarted = localStorage.getItem('aiTestStarted');
-    const savedQuizCompleted = localStorage.getItem('aiQuizCompleted');
-
-    if (savedTimers) {
-      try { this.questionTimers = JSON.parse(savedTimers); } catch { this.questionTimers = {}; }
-    }
-    if (savedLocked) {
-      try { this.lockedQuestions = JSON.parse(savedLocked); } catch { this.lockedQuestions = {}; }
-    }
-    if (savedUserAnswers) {
-      try { this.userAnswers = JSON.parse(savedUserAnswers); } catch { this.userAnswers = {}; }
-    }
-    if (savedTestStarted) {
-      this.testStarted = savedTestStarted === 'true';
-    }
-    if (savedIndex && !isNaN(Number(savedIndex))) {
-      this.currentQuestionIndex = Number(savedIndex);
-    }
-    if (savedQuizCompleted === 'true') {
-      this.quizCompleted = true;
-    }
+  private applyState(state: QuizState) {
+    this.questionTimers = state.questionTimers;
+    this.currentQuestionIndex = state.currentQuestionIndex;
+    this.lockedQuestions = state.lockedQuestions;
+    this.userAnswers = state.userAnswers;
+    this.testStarted = state.testStarted;
+    // Don't restore quizCompleted from localStorage - database is source of truth
   }
 
-  loadUserQuestionCounts() {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      this.fetchAllQuestions();
-      return;
-    }
-    this.http.get(`${environment.apiUrl}/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` }
-    }).subscribe({
-      next: (userData: any) => {
-        this.quizCompleted = userData.aiQuizCompleted === true;
-        this.fetchAllQuestions();
-      },
-      error: () => {
-        this.quizCompleted = false;
-        this.fetchAllQuestions();
-      }
-    });
-  }
-
-  fetchAllQuestions() {
+  loadQuestions() {
     this.loading = true;
-    const token = localStorage.getItem('token');
-    const userId = this.getUserIdFromToken();
-
+    const userId = this.aiQuizService.getUserIdFromToken();
     if (!userId) {
       this.loading = false;
-      this.questions = [];
       return;
     }
 
-    const apiUrl = `${environment.apiUrl}/ai-quiz/approved-ai-questions-by-set/${userId}`;
-
-    this.http.get(apiUrl, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    }).subscribe({
-      next: (questions: any) => {
-        this.questions = Array.isArray(questions) ? questions.filter((q: AIQuestion) => q.reviewStatus === 'approved') : [];
-        // Set skills and levels from questions
-        if (this.questions.length > 0) {
-          this.skills = Array.from(new Set(this.questions.map(q => q.skill))).filter(Boolean);
-          this.levels = Array.from(new Set(this.questions.map(q => q.level))).filter(Boolean);
-        } else {
-          this.skills = [];
-          this.levels = [];
-        }
-        this.loading = false;
-        this.initializeQuizAfterLoad();
-      },
-      error: (error) => {
-        console.error('Error fetching AI questions:', error);
-        this.questions = [];
-        this.loading = false;
-      }
+    this.aiQuizService.fetchApprovedQuestions(userId).subscribe(questions => {
+      this.questions = questions;
+      this.loading = false;
+      this.initializeQuizAfterLoad();
     });
   }
 
-  private getUserIdFromToken(): string | null {
-    const token = localStorage.getItem('token');
-    if (!token) return null;
-
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      return payload.id;
-    } catch (error) {
-      return null;
-    }
-  }
-
-  // FIX APPLIED: Restores question index from localStorage if valid, else sets to 0
   private initializeQuizAfterLoad() {
-    if (this.questions.length === 0) return;
-    if (this.quizCompleted) return;
+    if (this.questions.length === 0 || this.quizCompleted) return;
+
     this.initTimers();
 
-    // Restore question index if valid, else default to zero
-    const savedIndex = localStorage.getItem('aiCurrentQuestionIndex');
-    let index = 0;
-    if (savedIndex && !isNaN(Number(savedIndex))) {
-      const num = Number(savedIndex);
-      if (num >= 0 && num < this.questions.length) {
-        index = num;
-      }
+    if (this.currentQuestionIndex >= this.questions.length) {
+      this.currentQuestionIndex = 0;
     }
-    this.currentQuestionIndex = index;
 
     this.updateSelectedAnswerForCurrentQuestion();
     this.autoAdvanceIfLockedOrExpired();
-    if (!this.testStarted) {
-      this.startQuiz();
-    } else {
+
+    if (this.testStarted) {
       this.startTimer();
+    } else {
+      this.startQuiz();
     }
+
     this.saveQuizState();
     this.cdr.detectChanges();
   }
 
   private updateSelectedAnswerForCurrentQuestion() {
-    if (this.currentQuestion && this.userAnswers[this.currentQuestion._id]) {
-      this.selectedAnswer = this.userAnswers[this.currentQuestion._id];
-    } else {
-      this.selectedAnswer = '';
-    }
-    // console.log('updateSelectedAnswerForCurrentQuestion AI Quiz:', {
-    //   currentQuestion: this.currentQuestion?._id,
-    //   selectedAnswer: this.selectedAnswer,
-    //   userAnswers: this.userAnswers
-    // });
+    const currentQuestionId = this.currentQuestion?._id;
+    this.selectedAnswer = currentQuestionId ? this.userAnswers[currentQuestionId] || '' : '';
     this.cdr.detectChanges();
   }
 
@@ -225,47 +109,38 @@ export class AIQuizComponent implements OnInit, OnDestroy {
   }
 
   nextQuestion(): void {
-    this.clearTimer();
-    if (this.currentQuestion) {
-      this.userAnswers[this.currentQuestion._id] = this.selectedAnswer;
-    }
-    if (this.currentQuestionIndex < this.questions.length - 1) {
-      this.currentQuestionIndex++;
-      this.updateSelectedAnswerForCurrentQuestion();
-      this.startTimer();
-      this.saveQuizState();
-    } else {
-      this.submitQuiz();
-    }
-    this.cdr.detectChanges();
+    this.updateAnswerAndNavigate(this.currentQuestionIndex + 1);
   }
 
   prevQuestion(): void {
+    this.updateAnswerAndNavigate(this.currentQuestionIndex - 1);
+  }
+
+  private updateAnswerAndNavigate(newIndex: number) {
     this.clearTimer();
-    if (this.currentQuestion) {
-      this.userAnswers[this.currentQuestion._id] = this.selectedAnswer;
+    const currentQuestionId = this.currentQuestion?._id;
+    if (currentQuestionId) {
+      this.userAnswers[currentQuestionId] = this.selectedAnswer;
     }
-    if (this.currentQuestionIndex > 0) {
-      this.currentQuestionIndex--;
+
+    if (newIndex >= 0 && newIndex < this.questions.length) {
+      this.currentQuestionIndex = newIndex;
       this.updateSelectedAnswerForCurrentQuestion();
       this.startTimer();
       this.saveQuizState();
+    } else if (newIndex >= this.questions.length) {
+      this.submitQuiz();
     }
     this.cdr.detectChanges();
   }
 
   onAnswerSelect(option: string): void {
     this.selectedAnswer = option;
-    if (this.currentQuestion) {
-      this.userAnswers[this.currentQuestion._id] = option;
+    const currentQuestionId = this.currentQuestion?._id;
+    if (currentQuestionId) {
+      this.userAnswers[currentQuestionId] = option;
       this.saveQuizState();
     }
-    // console.log('onAnswerSelect AI Quiz:', {
-    //   currentQuestion: this.currentQuestion?._id,
-    //   selectedAnswer: this.selectedAnswer,
-    //   userAnswers: this.userAnswers,
-    //   option: option
-    // });
     this.cdr.detectChanges();
   }
 
@@ -276,7 +151,6 @@ export class AIQuizComponent implements OnInit, OnDestroy {
         this.initTimers();
       }
       this.testStarted = true;
-      this.alreadyAttempted = false;
       this.startTimer();
       this.saveQuizState();
     }
@@ -290,36 +164,25 @@ export class AIQuizComponent implements OnInit, OnDestroy {
     this.currentQuestionIndex = 0;
   }
 
-  private clearQuizStorage() {
-    const keys = ['aiQuestionTimers', 'aiCurrentQuestionIndex', 'aiLockedQuestions', 'aiUserAnswers', 'aiTestStarted'];
-    keys.forEach(key => localStorage.removeItem(key));
-  }
-
   initTimers() {
-    for (const q of this.questions) {
+    this.questions.forEach(q => {
       if (!this.questionTimers.hasOwnProperty(q._id)) {
-        const levelKey = q.level ? q.level.toLowerCase().trim() : 'beginner';
-        const timeForLevel = this.questionTimeMap[levelKey] || 90;
-        this.questionTimers[q._id] = timeForLevel;
+        const levelKey = q.level?.toLowerCase().trim() || 'beginner';
+        this.questionTimers[q._id] = this.questionTimeMap[levelKey] || 90;
       }
-    }
+    });
   }
 
   startTimer() {
     this.clearTimer();
     const q = this.currentQuestion;
-    if (!q) return;
-    if (!this.questionTimers.hasOwnProperty(q._id)) {
-      const levelKey = q.level ? q.level.toLowerCase().trim() : 'beginner';
-      this.questionTimers[q._id] = this.questionTimeMap[levelKey] || 90;
-    }
+    if (!q || !this.questionTimers.hasOwnProperty(q._id)) return;
+
     this.timer = this.questionTimers[q._id];
     this.timerInterval = setInterval(() => {
-      if (this.timer > 0) {
-        this.timer--;
-        this.questionTimers[q._id] = this.timer;
-        this.saveQuizState();
-      }
+      this.timer--;
+      this.questionTimers[q._id] = this.timer;
+      this.saveQuizState();
       if (this.timer <= 0) {
         this.handleTimerExpire();
       }
@@ -340,71 +203,50 @@ export class AIQuizComponent implements OnInit, OnDestroy {
       this.lockedQuestions[q._id] = true;
       this.saveQuizState();
 
-      // Find next question with time remaining
-      let nextQuestionIndex = this.findNextQuestionWithTime();
-
+      const nextQuestionIndex = this.findNextQuestionWithTime();
       if (nextQuestionIndex !== -1) {
-        // Move to the next question that has time remaining
         this.currentQuestionIndex = nextQuestionIndex;
         this.updateSelectedAnswerForCurrentQuestion();
         this.startTimer();
         this.saveQuizState();
       } else {
-        // All questions are either locked or have no time remaining
-        // Only then should we submit the quiz
         this.submitQuiz();
       }
     }
   }
 
-  // Helper method to find next question with time remaining
   findNextQuestionWithTime(): number {
-    // First, check questions after current index
     for (let i = this.currentQuestionIndex + 1; i < this.questions.length; i++) {
-      const question = this.questions[i];
-      if (question && !this.lockedQuestions[question._id] && this.questionTimers[question._id] > 0) {
-        return i;
-      }
+      const q = this.questions[i];
+      if (q && !this.lockedQuestions[q._id] && this.questionTimers[q._id] > 0) return i;
     }
-
-    // If no questions found after current index, check from beginning
     for (let i = 0; i < this.currentQuestionIndex; i++) {
-      const question = this.questions[i];
-      if (question && !this.lockedQuestions[question._id] && this.questionTimers[question._id] > 0) {
-        return i;
-      }
+      const q = this.questions[i];
+      if (q && !this.lockedQuestions[q._id] && this.questionTimers[q._id] > 0) return i;
     }
-
-    // No questions with time remaining found
     return -1;
   }
 
   saveQuizState() {
-    const state = {
-      aiQuestionTimers: JSON.stringify(this.questionTimers),
-      aiCurrentQuestionIndex: this.currentQuestionIndex.toString(),
-      aiLockedQuestions: JSON.stringify(this.lockedQuestions),
-      aiUserAnswers: JSON.stringify(this.userAnswers),
-      aiTestStarted: this.testStarted.toString(),
-      aiQuizCompleted: this.quizCompleted.toString()
+    const state: QuizState = {
+      questionTimers: this.questionTimers,
+      currentQuestionIndex: this.currentQuestionIndex,
+      lockedQuestions: this.lockedQuestions,
+      userAnswers: this.userAnswers,
+      testStarted: this.testStarted,
+      quizCompleted: this.quizCompleted
     };
-    Object.entries(state).forEach(([key, value]) => {
-      localStorage.setItem(key, value);
-    });
+    this.aiQuizService.saveQuizState(state);
   }
 
   submitQuiz() {
     this.clearTimer();
-    this.clearQuizStorage();
-    if (this.alreadyAttempted) {
-      alert('You have already attempted this quiz.');
-      return;
-    }
-    const userId = this.getUserIdFromToken();
+    const userId = this.aiQuizService.getUserIdFromToken();
     if (!userId) {
       alert('User ID not found. Please log in again.');
       return;
     }
+
     this.isSubmitting = true;
     const questionResponses = this.questions.map(q => ({
       questionId: q._id,
@@ -416,28 +258,26 @@ export class AIQuizComponent implements OnInit, OnDestroy {
       isCorrect: (this.userAnswers[q._id] || '').toLowerCase() === q.correctanswer.toLowerCase(),
       options: q.options
     }));
-    this.http.post(`${environment.apiUrl}/ai-quiz/submit-ai-quiz`, {
-      userId: userId,
-      questionResponses
-    }).subscribe({
+
+    this.aiQuizService.submitQuiz(userId, questionResponses).subscribe({
       next: () => {
         this.quizCompleted = true;
         this.testStarted = false;
-        localStorage.setItem('aiQuizCompleted', 'true');
         this.isSubmitting = false;
+        this.aiQuizService.clearQuizStorage();
+        localStorage.setItem('aiQuizCompleted', 'true'); // Keep this to prevent re-taking
       },
-      error: (err) => {
+      error: () => {
         alert('Error submitting quiz. Please try again.');
         this.isSubmitting = false;
       }
     });
-    return false;
   }
 
   autoAdvanceIfLockedOrExpired() {
-    while (this.currentQuestionIndex < this.questions.length - 1) {
-      const currentQ = this.questions[this.currentQuestionIndex];
-      if (currentQ && (this.lockedQuestions[currentQ._id] || this.questionTimers[currentQ._id] <= 0)) {
+    while (this.currentQuestionIndex < this.questions.length) {
+      const q = this.questions[this.currentQuestionIndex];
+      if (q && (this.lockedQuestions[q._id] || this.questionTimers[q._id] <= 0)) {
         this.currentQuestionIndex++;
       } else {
         break;

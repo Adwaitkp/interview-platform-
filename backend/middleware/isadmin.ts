@@ -1,13 +1,22 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-// Define a custom request type that includes userId and userRole
-interface CustomRequest extends Request {
-  userId?: string;
-  userRole?: string;
+interface JwtPayload {
+  id: string;
+  role: string;
 }
 
-const isAdmin = (req: CustomRequest, res: Response, next: NextFunction) => {
+// Extend Express Request interface to include custom properties
+declare global {
+  namespace Express {
+    interface Request {
+      userId?: string;
+      userRole?: string;
+    }
+  }
+}
+
+const isAdmin = (req: Request, res: Response, next: NextFunction) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -16,10 +25,13 @@ const isAdmin = (req: CustomRequest, res: Response, next: NextFunction) => {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as {
-      id: string;
-      role: string;
-    };
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      console.error('JWT_SECRET is not defined in environment variables.');
+      return res.status(500).json({ message: 'Server configuration error' });
+    }
+
+    const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
 
     req.userId = decoded.id;
     req.userRole = decoded.role;
@@ -28,7 +40,7 @@ const isAdmin = (req: CustomRequest, res: Response, next: NextFunction) => {
       return res.status(403).json({ message: 'Access denied: Admins only' });
     }
 
-    next(); // allow to proceed
+    next();
   } catch (error) {
     console.error('Token verification error:', error);
     return res.status(403).json({ message: 'Invalid or expired token' });
