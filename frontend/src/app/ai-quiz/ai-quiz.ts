@@ -58,7 +58,7 @@ export class AIQuizComponent implements OnInit, OnDestroy {
     this.lockedQuestions = state.lockedQuestions;
     this.userAnswers = state.userAnswers;
     this.testStarted = state.testStarted;
-    // Don't restore quizCompleted from localStorage - database is source of truth
+
   }
 
   loadQuestions() {

@@ -9,55 +9,69 @@ import { CommonModule } from '@angular/common';
   templateUrl: './header.html'
 })
 export class HeaderComponent implements OnInit {
-  profileOpen = false;
+  // profileOpen = false;
+
   name: string = '';
   role: string = '';
+  sidebarExpanded: boolean = false; // Start expanded by default
 
-  constructor(private router: Router, private eRef: ElementRef) {}
+  constructor(private router: Router, private eRef: ElementRef) { }
 
   ngOnInit(): void {
     this.name = localStorage.getItem('name') || 'User';
     this.role = localStorage.getItem('role') || '';
+    this.updateSidebarWidth();
   }
 
-navigateTo(target: string): void {
-  switch (target) {
-    case 'admin-dashboard':
-      this.router.navigate(['/admin-dashboard']);
-      break;
-    case 'candidate-management':
-      this.router.navigate(['/candidate-management']);
-      break;
-    case 'questions':
-      this.router.navigate(['/questions']); // Keep this - for normal questions
-      break;
-    case 'ai-questions':
-      this.router.navigate(['/ai-questions-unified']); // CHANGE THIS LINE
-      break;
-    case 'quiz':
-      this.router.navigate(['/quiz']);
-      break;
-    case 'ai-quiz':
-      this.router.navigate(['/ai-quiz']);
-      break;
-    default:
-      break;
+  // Toggle sidebar between expanded and collapsed
+  toggleSidebar(): void {
+    this.sidebarExpanded = !this.sidebarExpanded;
+    this.updateSidebarWidth();
+    
+    // Close profile dropdown when toggling sidebar
+    // if (this.profileOpen) {
+    //   this.profileOpen = false;
+    // }
   }
-  this.profileOpen = false;
-}
 
+  // Update CSS custom property for sidebar width
+  private updateSidebarWidth(): void {
+    const width = this.sidebarExpanded ? '16rem' : '4rem';
+    document.documentElement.style.setProperty('--sidebar-width', width);
+  }
+
+  navigateTo(target: string): void {
+    switch (target) {
+      case 'admin-dashboard':
+        this.router.navigate(['/admin-dashboard']);
+        break;
+      case 'candidate-management':
+        this.router.navigate(['/candidate-management']);
+        break;
+      case 'questions':
+        this.router.navigate(['/questions']); // Keep this - for normal questions
+        break;
+      case 'ai-questions':
+        this.router.navigate(['/ai-questions-unified']); // CHANGE THIS LINE
+        break;
+      default:
+        break;
+    }
+    // this.profileOpen = false;
+    // Don't close sidebar when navigating - keep it in current state
+  }
 
   logout(): void {
     // Preserve quiz state during logout
     const quizStateKeys = [
       // Normal quiz keys
-      'questionTimers', 
-      'currentQuestionIndex', 
-      'lockedQuestions', 
-      'selectedOptions', 
+      'questionTimers',
+      'currentQuestionIndex',
+      'lockedQuestions',
+      'selectedOptions',
       'userAnswers', // <-- added for answer persistence
-      'testStarted', 
-      'quizCompleted', 
+      'testStarted',
+      'quizCompleted',
       'allQuestions',
       // AI quiz keys
       'aiQuestionTimers',
@@ -71,7 +85,7 @@ navigateTo(target: string): void {
       'level',
       'questionCounts'
     ];
-    
+
     const preservedState: { [key: string]: string | null } = {};
     quizStateKeys.forEach(key => {
       preservedState[key] = localStorage.getItem(key);
@@ -87,17 +101,16 @@ navigateTo(target: string): void {
     });
 
     this.router.navigate(['/login']);
-    this.profileOpen = false;
+    // this.profileOpen = false;
+    this.sidebarExpanded = true; // Reset to expanded for next login
   }
 
-  toggleProfileMenu(): void {
-    this.profileOpen = !this.profileOpen;
-  }
 
-  @HostListener('document:mousedown', ['$event'])
-  clickout(event: MouseEvent): void {
-    if (this.profileOpen && !this.eRef.nativeElement.contains(event.target)) {
-      this.profileOpen = false;
-    }
-  }
+  // @HostListener('document:mousedown', ['$event'])
+  // clickout(event: MouseEvent): void {
+  //   if (this.profileOpen && !this.eRef.nativeElement.contains(event.target)) {
+  //     this.profileOpen = false;
+  //   }
+  //   // Remove auto-close behavior for sidebar - let user control it manually
+  // }
 }

@@ -41,6 +41,9 @@ export class AdminDashboardComponent implements OnInit {
   currentPage: number = 0;
   pageSize: number = 10;
 
+  sortField: string = '';
+  sortDirection: 'asc' | 'desc' = 'asc';
+
   // Server-side filtering is now handled by the API
   get filteredResults(): QuizResult[] {
     return this.results;
@@ -60,8 +63,13 @@ export class AdminDashboardComponent implements OnInit {
     }
 
     const pages: number[] = [];
-    for (let i = 1; i < this.totalPages - 1; i++) {
-      pages.push(i);
+    const start = Math.max(1, this.currentPage - 1);
+    const end = Math.min(this.totalPages - 1, this.currentPage + 2);
+    
+    for (let i = start; i < end; i++) {
+      if (i !== 0 && i !== this.totalPages - 1) {
+        pages.push(i);
+      }
     }
     return pages;
   }
@@ -69,6 +77,9 @@ export class AdminDashboardComponent implements OnInit {
   changePage(page: number): void {
     if (page < 0 || page >= this.totalPages) return;
     this.currentPage = page;
+    // Reset sorting when changing pages
+    this.sortField = '';
+    this.sortDirection = 'asc';
     this.loadResults();
   }
 
@@ -106,28 +117,24 @@ export class AdminDashboardComponent implements OnInit {
       const token = localStorage.getItem('token');
       if (!token) return;
 
+      // Get all results from both APIs with a large limit to get total counts
       const [quizData, aiData] = await Promise.all([
-        this.adminService.getResults(this.currentPage, this.pageSize, this.searchTerm),
-        this.adminService.getAIResults(this.currentPage, this.pageSize, this.searchTerm)
+        this.adminService.getResults(0, 1000, this.searchTerm), // Get all to calculate proper pagination
+        this.adminService.getAIResults(0, 1000, this.searchTerm)
       ]);
 
-      const { quizResults, totalPages: quizTotalPages, currentPage: quizCurrentPage, totalResults: quizTotalResults } = quizData;
-      const { aiResults, totalPages: aiTotalPages, currentPage: aiCurrentPage, totalResults: aiTotalResults } = aiData;
+      const { quizResults, totalResults: quizTotalResults } = quizData;
+      const { aiResults, totalResults: aiTotalResults } = aiData;
 
-      this.totalPages = Math.max(quizTotalPages, aiTotalPages);
-      this.currentPage = quizCurrentPage || aiCurrentPage || 0;
-      this.totalResults = quizTotalResults + aiTotalResults;
-
-      const combinedResults: QuizResult[] = [];
+      const allCombinedResults: QuizResult[] = [];
 
       // 1) add regular quiz results and ensure quizDate is set
       quizResults.forEach((result: any) => {
         const user = this.users.find(u => u.email === result.email);
-        console.log('Finding user for email:', result.email, 'Found user:', user); // Debug log
-        combinedResults.push({
+        allCombinedResults.push({
           ...result,
           quizDate: result.quizDate || result.createdAt || null,
-          userId: user?._id || result.userId || '', // Try multiple sources
+          userId: user?._id || result.userId || '',
           aiScore: undefined
         });
       });
@@ -135,8 +142,7 @@ export class AdminDashboardComponent implements OnInit {
       // 2) Add all AI results as separate entries (each retest gets its own row)
       aiResults.forEach((aiResult: any) => {
         const user = this.users.find(u => u.email === aiResult.email);
-        console.log('Adding AI result for email:', aiResult.email, 'Found user:', user); // Debug log
-        combinedResults.push({
+        allCombinedResults.push({
           _id: aiResult._id,
           name: aiResult.name,
           email: aiResult.email,
@@ -145,7 +151,7 @@ export class AdminDashboardComponent implements OnInit {
           overallPercentage: 0,
           skillResults: [],
           quizDate: aiResult.quizDate || aiResult.createdAt || null,
-          userId: user?._id || aiResult.userId || '', // Try multiple sources
+          userId: user?._id || aiResult.userId || '',
           aiScore: {
             totalMarks: aiResult.totalMarks,
             totalQuestions: aiResult.totalQuestions,
@@ -160,8 +166,22 @@ export class AdminDashboardComponent implements OnInit {
         });
       });
 
-      // assign results
-      this.results = combinedResults;
+      // Sort all combined results by date (newest first)
+      allCombinedResults.sort((a, b) => {
+        const dateA = new Date(a.quizDate || 0).getTime();
+        const dateB = new Date(b.quizDate || 0).getTime();
+        return dateB - dateA;
+      });
+
+      // Calculate pagination
+      this.totalResults = allCombinedResults.length;
+      this.totalPages = Math.ceil(this.totalResults / this.pageSize);
+
+      // Apply client-side pagination to get exactly 10 results for current page
+      const startIndex = this.currentPage * this.pageSize;
+      const endIndex = startIndex + this.pageSize;
+      this.results = allCombinedResults.slice(startIndex, endIndex);
+
       this.loading = false;
     } catch (err) {
       console.error('❌ Error fetching data:', err);
@@ -211,6 +231,9 @@ export class AdminDashboardComponent implements OnInit {
 
   async search(): Promise<void> {
     this.currentPage = 0;
+    // Reset sorting when searching
+    this.sortField = '';
+    this.sortDirection = 'asc';
     this.loadResults();
   }
 
@@ -239,14 +262,14 @@ export class AdminDashboardComponent implements OnInit {
   // Retest Modal methods
   async handleRetestModalAction(confirm: boolean): Promise<void> {
     this.showRetestModal = false;
-    
+
     if (confirm && this.selectedRetestResult) {
       const result = this.selectedRetestResult;
       this.resettingQuizIds.add(result.userId!);
-      
+
       try {
         await this.adminService.retestUser(result.userId!);
-        
+
         this.loadResults();
       } catch (error) {
         console.error('Error resetting quiz:', error);
@@ -255,7 +278,7 @@ export class AdminDashboardComponent implements OnInit {
         this.resettingQuizIds.delete(result.userId!);
       }
     }
-    
+
     this.selectedRetestResult = null;
   }
 
@@ -322,5 +345,53 @@ export class AdminDashboardComponent implements OnInit {
 
   getOptionKeys(): ('a' | 'b' | 'c' | 'd')[] {
     return ['a', 'b', 'c', 'd'];
+  }
+  sortResults(field: string): void {
+    if (this.sortField === field) {
+      // Toggle direction if same field
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      // New field, default to ascending
+      this.sortField = field;
+      this.sortDirection = 'asc';
+    }
+
+    // Sort the current page results
+    this.results.sort((a, b) => {
+      let valueA: any;
+      let valueB: any;
+
+      switch (field) {
+        case 'name':
+          valueA = a.name?.toLowerCase() || '';
+          valueB = b.name?.toLowerCase() || '';
+          break;
+        case 'email':
+          valueA = a.email?.toLowerCase() || '';
+          valueB = b.email?.toLowerCase() || '';
+          break;
+        case 'date':
+          valueA = a.quizDate ? new Date(a.quizDate).getTime() : 0;
+          valueB = b.quizDate ? new Date(b.quizDate).getTime() : 0;
+          break;
+        default:
+          return 0;
+      }
+
+      if (valueA < valueB) {
+        return this.sortDirection === 'asc' ? -1 : 1;
+      }
+      if (valueA > valueB) {
+        return this.sortDirection === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+  }
+
+  getSortIcon(field: string): string {
+    if (this.sortField !== field) {
+      return '↕'; // Default sort icon
+    }
+    return this.sortDirection === 'asc' ? '↑' : '↓';
   }
 }
