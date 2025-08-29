@@ -610,4 +610,20 @@ export class CandidateManagement implements OnInit {
     return this.sortDirection === 'asc' ? '↑' : '↓';
   }
 
+  validateQuestionCount(index: number, event: Event): void {
+    const target = event.target as HTMLInputElement;
+    let value = parseInt(target.value) || 0;
+    
+    // Enforce limits
+    if (value > 10) {
+      value = value % 10 ; 
+    } 
+    
+    // Update the skillLevels array
+    this.skillLevels[index].count = value;
+    
+    // Update the input field value
+    target.value = value.toString();
+  }
+
 }
