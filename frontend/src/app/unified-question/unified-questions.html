@@ -1,4 +1,5 @@
-<div class="bg-white dark:bg-gray-900 p-6 shadow-sm border border-gray-200 dark:border-gray-700 transition-all duration-300 ease-in-out min-h-screen" style="margin-left: var(--sidebar-width, 16rem);">
+<div class="p-6"
+  style="margin-left: var(--sidebar-width, 16rem);">
   <!-- Header -->
   <div class="flex justify-between items-center mb-4">
     <h1 class="text-2xl font-bold dark:text-white">AI Questions Management</h1>
@@ -82,7 +83,7 @@
           <th class="px-4 py-3 text-center">Actions</th>
         </tr>
       </thead>
-      <tbody class="bg-white divide-y divide-gray-100  text-sm text-gray-800 ">
+      <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700 text-sm text-gray-800 dark:text-gray-200">
         <tr *ngFor="let q of aiQuestions; trackBy: trackByFn" class="hover:bg-orange-50 dark:hover:bg-orange-900/20 transition">
           <td class="px-4 py-3">{{ q.skill }}</td>
           <td class="px-4 py-3">{{ q.level | titlecase }}</td>
@@ -182,7 +183,7 @@
           <th class="px-4 py-3 ">Set</th>
         </tr>
       </thead>
-      <tbody class="bg-white  divide-y divide-gray-100  text-sm text-gray-800 ">
+      <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700 text-sm text-gray-800 dark:text-gray-200">
         <tr *ngFor="let q of acceptedQuestions; trackBy: trackByFn" class="hover:bg-green-50 dark:hover:bg-green-900/20 transition">
           <td class="px-4 py-3">{{ q.skill }}</td>
           <td class="px-4 py-3">{{ q.level | titlecase }}</td>

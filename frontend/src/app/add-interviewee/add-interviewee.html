@@ -1,189 +1,192 @@
 <div class="flex justify-between items-center mb-6">
-      <h2 class="text-2xl font-semibold text-black dark:text-white">Add Candidate</h2>
-      <button type="button" (click)="onCancel.emit()" class="text-gray-500 hover:text-gray-700">
-        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-        </svg>
-      </button>
-    </div>
-
-    <!-- Form -->
-    <form [formGroup]="form" (ngSubmit)="onSubmit()" class="space-y-6" (click)="closeAllDropdowns()">
-
-      <!-- Grid Fields -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-        <!-- Name -->
-        <div>
-          <label for="name" class="block text-sm font-medium text-gray-700 dark:text-gray-400">Name</label>
-          <input id="name" type="text" formControlName="name"
-            class="mt-1 w-full border border-gray-300 rounded-md dark:text-gray-200 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-          <div *ngIf="name?.touched && name?.invalid" class="text-red-400 text-sm mt-1">
-            <small *ngIf="name!.errors?.['required']">Name is required.</small>
-          </div>
-        </div>
-
-        <!-- Email -->
-        <div>
-          <label for="email" class="block text-sm font-medium text-gray-700 dark:text-gray-400">Email</label>
-          <input id="email" type="email" formControlName="email"
-            class="mt-1 w-full border border-gray-300 rounded-md dark:text-gray-200 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-          <div *ngIf="email?.touched && email?.invalid" class="text-red-400 text-sm mt-1">
-            <small *ngIf="email!.errors?.['required']">Email is required.</small>
-            <small *ngIf="email!.errors?.['email']">Enter a valid email.</small>
-          </div>
-        </div>
-
-        <!-- Password -->
-        <div>
-          <label for="password" class="block text-sm font-medium text-gray-700 dark:text-gray-400">Password</label>
-          <div class="relative mt-1">
-            <input id="password" [type]="showPassword ? 'text' : 'password'" formControlName="password"
-              class="w-full border border-gray-300 rounded-md dark:text-gray-200 px-4 py-2 pr-16 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-            <button type="button" (click)="toggleShowPassword()" aria-label="Toggle password visibility"
-              class="absolute top-1/2 right-3 transform -translate-y-1/2 text-sm text-indigo-600 hover:underline">
-              {{ showPassword ? 'Hide' : 'Show' }}
-            </button>
-          </div>
-          <div *ngIf="password?.touched && password?.invalid" class="text-red-400 text-sm mt-1">
-            <small *ngIf="password!.errors?.['required']">Password is required.</small>
-            <small *ngIf="password!.errors?.['minlength']">Password must be at least 6 characters.</small>
-          </div>
-        </div>
-
-        <!-- Confirm Password -->
-        <div>
-          <label for="confirmPassword" class="block text-sm font-medium text-gray-700 dark:text-gray-400">Confirm Password</label>
-          <div class="relative mt-1">
-            <input id="confirmPassword" [type]="showConfirmPassword ? 'text' : 'password'"
-              formControlName="confirmPassword"
-              class="w-full border border-gray-300 rounded-md dark:text-gray-200 px-4 py-2 pr-16 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-            <button type="button" (click)="toggleShowConfirmPassword()" aria-label="Toggle confirm password visibility"
-              class="absolute top-1/2 right-3 transform -translate-y-1/2 text-sm text-indigo-600 hover:underline">
-              {{ showConfirmPassword ? 'Hide' : 'Show' }}
-            </button>
-          </div>
-          <div *ngIf="confirmPassword?.touched && confirmPassword?.invalid" class="text-red-400 text-sm mt-1">
-            <small *ngIf="confirmPassword!.errors?.['required']">Please confirm your password.</small>
-          </div>
-          <div *ngIf="form.errors?.['passwordsMismatch'] && confirmPassword?.touched" class="text-red-400 text-sm mt-1">
-            <small>Passwords do not match.</small>
-          </div>
-        </div>
-
-        <!-- Skill Dropdown (Multi-select) -->
-        <div>
-          <label for="skill" class="block text-sm font-medium text-gray-700 dark:text-gray-400">Skills</label>
-          <div class="relative" #skillDropdown>
-            <div
-              class="mt-1 w-full border border-gray-300 rounded-md px-4 py-2 focus-within:ring-2 focus-within:ring-indigo-500 min-h-[42px] flex flex-wrap gap-2 cursor-pointer"
-              (click)="toggleSkillDropdown($event)">
-              <div *ngIf="selectedSkills.length === 0" class="text-gray-400">Select skills</div>
-              <div *ngFor="let skill of selectedSkills"
-                class="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-md text-sm flex items-center">
-                {{ skill }}
-                <button type="button" (click)="removeSkill(skill, $event)"
-                  class="ml-1 text-indigo-600 hover:text-indigo-800">
-                  &times;
-                </button>
-              </div>
-            </div>
-            <div *ngIf="showSkillDropdown"
-              class="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-40 overflow-y-auto">
-              <div *ngFor="let skill of availableSkills"
-                class="px-4 py-2 hover:bg-indigo-50 cursor-pointer flex items-center"
-                (click)="toggleSkillSelection(skill, $event)">
-                <div class="flex-grow">{{ skill }}</div>
-                <div *ngIf="isSkillSelected(skill)" class="text-indigo-600">✓</div>
-              </div>
-            </div>
-          </div>
-          <div class="text-xs text-gray-500 mt-1"></div>
-          <div *ngIf="skill?.touched && skill?.invalid" class="text-red-400 text-sm mt-1">
-            <small *ngIf="skill!.errors?.['required']">At least one skill is required.</small>
-          </div>
-        </div>
-
-        <!-- Level Dropdown (Custom Multi-select) -->
-        <div>
-          <label for="level" class="block text-sm font-medium text-gray-700 dark:text-gray-400">Levels</label>
-          <div class="relative" #levelDropdown>
-            <div
-              class="mt-1 w-full border border-gray-300 rounded-md px-4 py-2 focus-within:ring-2 focus-within:ring-indigo-500 min-h-[42px] flex flex-wrap gap-2 cursor-pointer"
-              (click)="toggleLevelDropdown($event)">
-              <div *ngIf="selectedLevels.length === 0" class="text-gray-400">Select levels</div>
-              <div *ngFor="let level of selectedLevels"
-                class="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-md text-sm flex items-center">
-                {{ level }}
-                <button type="button" (click)="removeLevel(level, $event)"
-                  class="ml-1 text-indigo-600 hover:text-indigo-800">
-                  &times;
-                </button>
-              </div>
-            </div>
-            <div *ngIf="showLevelDropdown"
-              class="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-40 overflow-y-auto">
-              <div *ngFor="let level of levelOptions"
-                class="px-4 py-2 hover:bg-indigo-50 cursor-pointer flex items-center"
-                (click)="toggleLevelSelection(level, $event)">
-                <div class="flex-grow">{{ level }}</div>
-                <div *ngIf="isLevelSelected(level)" class="text-indigo-600">✓</div>
-              </div>
-            </div>
-          </div>
-          <div class="text-xs text-gray-500 mt-1"></div>
-          <div *ngIf="level?.touched && level?.invalid" class="text-red-400 text-sm mt-1">
-            <small *ngIf="level!.errors?.['required']">At least one level is required.</small>
-          </div>
-        </div>
-      </div>
-
-      <!-- Per-skill/level question count table -->
-<div *ngIf="selectedSkills.length > 0 && selectedLevels.length > 0" class="col-span-1 md:col-span-2">
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Number of Questions per Skill & Level</label>
-        <div class="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
-          <table class="min-w-full bg-white dark:bg-gray-800">
-            <thead class="bg-gray-50 dark:bg-gray-700">
-              <tr>
-                <th class="px-4 py-2 border-b border-gray-200 dark:border-gray-700 dark:text-gray-300"></th>
-                <th *ngFor="let level of selectedLevels" class="px-4 py-2 border-b border-gray-200 dark:border-gray-700 text-center dark:text-gray-300">{{ level }}</th>
-              </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200 dark:divide-gray-700">
-              <tr *ngFor="let skill of selectedSkills" class=" transition-colors">
-                <td class="px-4 py-2 font-semibold dark:text-gray-300">{{ skill }}</td>
-                <td *ngFor="let level of selectedLevels" class="px-4 py-2 text-center">
-                  <input type="number" min="1" [value]="questionCounts[skill][level] || 5"
-                    (input)="onQuestionCountChange(skill, level, $event.target.value)"
-                    class="w-16 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md px-2 py-1 text-center" />
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+  <h2 class="text-2xl font-semibold text-black dark:text-white">Add Candidate</h2>
+  <button type="button" (click)="onCancel.emit()" class="text-gray-500 hover:text-gray-700">
+    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+    </svg>
+  </button>
 </div>
 
+<!-- Form -->
+<form [formGroup]="form" (ngSubmit)="onSubmit()" class="space-y-6" (click)="closeAllDropdowns()">
 
-      <!-- Submit Error Message -->
-      <div *ngIf="submitError" class="text-red-400 text-sm">
-        <small>{{ submitError }}</small>
+  <!-- Grid Fields -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+    <!-- Name -->
+    <div>
+      <label for="name" class="block text-sm font-medium text-gray-700 dark:text-gray-400">Name</label>
+      <input id="name" type="text" formControlName="name"
+        class="mt-1 w-full border border-gray-300 rounded-md dark:text-gray-200 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+      <div *ngIf="name?.touched && name?.invalid" class="text-red-400 text-sm mt-1">
+        <small *ngIf="name!.errors?.['required']">Name is required.</small>
       </div>
+    </div>
 
-      <!-- Submit Button -->
-      <div class="flex gap-3 justify-end mt-6">
-        <button type="submit" [disabled]="loading || form.invalid"
-          class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-200 disabled:cursor-not-allowed">
-          {{ loading ? 'Submitting...' : 'Submit' }}
+    <!-- Email -->
+    <div>
+      <label for="email" class="block text-sm font-medium text-gray-700 dark:text-gray-400">Email</label>
+      <input id="email" type="email" formControlName="email"
+        class="mt-1 w-full border border-gray-300 rounded-md dark:text-gray-200 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+      <div *ngIf="email?.touched && email?.invalid" class="text-red-400 text-sm mt-1">
+        <small *ngIf="email!.errors?.['required']">Email is required.</small>
+        <small *ngIf="email!.errors?.['email']">Enter a valid email.</small>
+      </div>
+    </div>
+
+    <!-- Password -->
+    <div>
+      <label for="password" class="block text-sm font-medium text-gray-700 dark:text-gray-400">Password</label>
+      <div class="relative mt-1">
+        <input id="password" [type]="showPassword ? 'text' : 'password'" formControlName="password"
+          class="w-full border border-gray-300 rounded-md dark:text-gray-200 px-4 py-2 pr-16 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        <button type="button" (click)="toggleShowPassword()" aria-label="Toggle password visibility"
+          class="absolute top-1/2 right-3 transform -translate-y-1/2 text-sm text-indigo-600 hover:underline">
+          {{ showPassword ? 'Hide' : 'Show' }}
         </button>
-        <button type="button" (click)="onCancel.emit()"
-          class="px-4 py-2 bg-gray-300 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors duration-200">
-          Cancel
+      </div>
+      <div *ngIf="password?.touched && password?.invalid" class="text-red-400 text-sm mt-1">
+        <small *ngIf="password!.errors?.['required']">Password is required.</small>
+        <small *ngIf="password!.errors?.['minlength']">Password must be at least 6 characters.</small>
+      </div>
+    </div>
+
+    <!-- Confirm Password -->
+    <div>
+      <label for="confirmPassword" class="block text-sm font-medium text-gray-700 dark:text-gray-400">Confirm
+        Password</label>
+      <div class="relative mt-1">
+        <input id="confirmPassword" [type]="showConfirmPassword ? 'text' : 'password'" formControlName="confirmPassword"
+          class="w-full border border-gray-300 rounded-md dark:text-gray-200 px-4 py-2 pr-16 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        <button type="button" (click)="toggleShowConfirmPassword()" aria-label="Toggle confirm password visibility"
+          class="absolute top-1/2 right-3 transform -translate-y-1/2 text-sm text-indigo-600 hover:underline">
+          {{ showConfirmPassword ? 'Hide' : 'Show' }}
         </button>
       </div>
-
-      <!-- Success Message -->
-      <div *ngIf="onSuccessMessage" class="text-green-600 text-sm text-center">
-        {{ onSuccessMessage }}
+      <div *ngIf="confirmPassword?.touched && confirmPassword?.invalid" class="text-red-400 text-sm mt-1">
+        <small *ngIf="confirmPassword!.errors?.['required']">Please confirm your password.</small>
       </div>
+      <div *ngIf="form.errors?.['passwordsMismatch'] && confirmPassword?.touched" class="text-red-400 text-sm mt-1">
+        <small>Passwords do not match.</small>
+      </div>
+    </div>
 
-    </form>
+    <!-- Skill Dropdown (Multi-select) -->
+    <div>
+      <label for="skill" class="block text-sm font-medium text-gray-700 dark:text-gray-400">Skills</label>
+      <div class="relative" #skillDropdown>
+        <div
+          class="mt-1 w-full border border-gray-300 rounded-md px-4 py-2 focus-within:ring-2 focus-within:ring-indigo-500 min-h-[42px] flex flex-wrap gap-2 cursor-pointer"
+          (click)="toggleSkillDropdown($event)">
+          <div *ngIf="selectedSkills.length === 0" class="text-gray-400">Select skills</div>
+          <div *ngFor="let skill of selectedSkills"
+            class="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-md text-sm flex items-center">
+            {{ skill }}
+            <button type="button" (click)="removeSkill(skill, $event)"
+              class="ml-1 text-indigo-600 hover:text-indigo-800">
+              &times;
+            </button>
+          </div>
+        </div>
+        <div *ngIf="showSkillDropdown"
+          class="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-40 overflow-y-auto">
+          <div *ngFor="let skill of availableSkills"
+            class="px-4 py-2 hover:bg-indigo-50 cursor-pointer flex items-center"
+            (click)="toggleSkillSelection(skill, $event)">
+            <div class="flex-grow">{{ skill }}</div>
+            <div *ngIf="isSkillSelected(skill)" class="text-indigo-600">✓</div>
+          </div>
+        </div>
+      </div>
+      <div class="text-xs text-gray-500 mt-1"></div>
+      <div *ngIf="skill?.touched && skill?.invalid" class="text-red-400 text-sm mt-1">
+        <small *ngIf="skill!.errors?.['required']">At least one skill is required.</small>
+      </div>
+    </div>
+
+    <!-- Level Dropdown (Custom Multi-select) -->
+    <div>
+      <label for="level" class="block text-sm font-medium text-gray-700 dark:text-gray-400">Levels</label>
+      <div class="relative" #levelDropdown>
+        <div
+          class="mt-1 w-full border border-gray-300 rounded-md px-4 py-2 focus-within:ring-2 focus-within:ring-indigo-500 min-h-[42px] flex flex-wrap gap-2 cursor-pointer"
+          (click)="toggleLevelDropdown($event)">
+          <div *ngIf="selectedLevels.length === 0" class="text-gray-400">Select levels</div>
+          <div *ngFor="let level of selectedLevels"
+            class="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-md text-sm flex items-center">
+            {{ level }}
+            <button type="button" (click)="removeLevel(level, $event)"
+              class="ml-1 text-indigo-600 hover:text-indigo-800">
+              &times;
+            </button>
+          </div>
+        </div>
+        <div *ngIf="showLevelDropdown"
+          class="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-40 overflow-y-auto">
+          <div *ngFor="let level of levelOptions" class="px-4 py-2 hover:bg-indigo-50 cursor-pointer flex items-center"
+            (click)="toggleLevelSelection(level, $event)">
+            <div class="flex-grow">{{ level }}</div>
+            <div *ngIf="isLevelSelected(level)" class="text-indigo-600">✓</div>
+          </div>
+        </div>
+      </div>
+      <div class="text-xs text-gray-500 mt-1"></div>
+      <div *ngIf="level?.touched && level?.invalid" class="text-red-400 text-sm mt-1">
+        <small *ngIf="level!.errors?.['required']">At least one level is required.</small>
+      </div>
+    </div>
+  </div>
+
+  <!-- Per-skill/level question count table -->
+  <div *ngIf="selectedSkills.length > 0 && selectedLevels.length > 0" class="col-span-1 md:col-span-2">
+    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Number of Questions per Skill &
+      Level</label>
+    <div class="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+      <table class="min-w-full bg-white dark:bg-gray-800">
+        <thead class="bg-gray-50 dark:bg-gray-700">
+          <tr>
+            <th class="px-4 py-2 border-b border-gray-200 dark:border-gray-700 dark:text-gray-300 font-semibold"></th>
+            <th *ngFor="let level of selectedLevels"
+              class="px-4 py-2 border-b border-gray-200 dark:border-gray-700 text-center dark:text-gray-300 font-semibold">
+              {{ level }}
+            </th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200 dark:divide-gray-700">
+          <tr *ngFor="let skill of selectedSkills" class=" transition-colors">
+            <td class="px-4 py-2 font-medium dark:text-black">{{ skill }}</td>
+            <td *ngFor="let level of selectedLevels" class="px-4 py-2 text-center">
+              <input type="number" min="1" [value]="questionCounts[skill][level] || 5"
+                (input)="onQuestionCountChange(skill, level, $event.target.value)"
+                class="w-16 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md px-2 py-1 text-center" />
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+
+  <!-- Submit Error Message -->
+  <div *ngIf="submitError" class="text-red-400 text-sm">
+    <small>{{ submitError }}</small>
+  </div>
+
+  <!-- Submit Button -->
+  <div class="flex gap-3 justify-end mt-6">
+    <button type="submit" [disabled]="loading || form.invalid"
+      class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-200 disabled:cursor-not-allowed">
+      {{ loading ? 'Submitting...' : 'Submit' }}
+    </button>
+    <button type="button" (click)="onCancel.emit()"
+      class="px-4 py-2 bg-gray-300 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors duration-200">
+      Cancel
+    </button>
+  </div>
+
+  <!-- Success Message -->
+  <div *ngIf="onSuccessMessage" class="text-green-600 text-sm text-center">
+    {{ onSuccessMessage }}
+  </div>
+
+</form>
