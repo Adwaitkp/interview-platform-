@@ -12,22 +12,23 @@ async function generateQuestionsWithGemini(skill: string, level: string, count: 
   }
 
   const prompt = `
-       You are a skilled exam designer.
+You are a skilled exam designer.
 
-Generate exactly ${count} **unique** multiple‑choice questions to assess **${skill}** at the **${level}** level.  
-Each question must have:
-- A unique question text (no repeats).
+Generate exactly ${count} **unique and non-overlapping** multiple-choice questions to assess **${skill}** at the **${level}** level.  
 
-- And if i generate one question and then generate another one with the same skill and level,
-  it should not be similar to the previous one.
-- The questions should be completely different from each other.
-- dont just change the prasing of the question. 
+### Rules for uniqueness:
+- **No repeated or similar questions** across different generations.  
+- Do not just rephrase an earlier question — every question must test a **different concept, scenario, or problem type**.  
+- If a previous question tested the same formula, logic, or idea, skip it and create something completely new.  
+- Questions across different sets (Set-1, Set-2, etc.) must also be **mutually unique**.  
 
-- i want completely different questions.
-- 4 distinct options labeled a, b, c, d.
-- Exactly one correct answer.
+### Question format:
+- Each question must include a **clear and unique question text**.  
+- Provide 4 distinct options labeled "a", "b", "c", "d".  
+- Exactly one correct answer.  
 
-Return only this exact JSON format:
+### Output format:
+Return only this exact JSON array (no text outside JSON):
 
 [
   {
@@ -39,10 +40,10 @@ Return only this exact JSON format:
       "d": "Option D text"
     },
     "correctanswer": "a"
-  },
-  ...
+  }
 ]
 `;
+
 
   try {
     const response = await axios.post(
@@ -93,37 +94,49 @@ export const generateAiQuestions = async (req: Request, res: Response) => {
     const { skillLevels, generatedBy, setid, useExistingSet, targetSetNumber } = req.body;
 
     let effectiveSetId: string;
+    let setLabel: string;
+
+    const User = mongoose.model('User');
+    const user = await User.findById(generatedBy);
+    if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+    }
 
     if (useExistingSet === true && setid) {
         effectiveSetId = setid;
+        // Find the label for this setId
+        const userSet = user.userSpecificSets?.find((s: any) => s.setId === setid);
+        setLabel = userSet ? userSet.label : 'Unknown Set';
+       
     } else if (useExistingSet === true && targetSetNumber) {
-        const existingQuestions = await AIQuestions.find({
-            $or: [{ generatedBy }, { assignedTo: generatedBy }]
-        }).populate('generatedBy', 'name').populate('assignedTo', 'name');
-
-        const setGroups = new Map();
-        existingQuestions.forEach((q: any) => {
-            if (q.setid) {
-                if (!setGroups.has(q.setid)) {
-                    setGroups.set(q.setid, []);
-                }
-                setGroups.get(q.setid).push(q);
-            }
-        });
-
-        const sortedSetIds = Array.from(setGroups.keys()).sort((a, b) => {
-            const aFirstQuestion = setGroups.get(a)[0];
-            const bFirstQuestion = setGroups.get(b)[0];
-            return new Date(aFirstQuestion.createdAt).getTime() - new Date(bFirstQuestion.createdAt).getTime();
-        });
-
-        if (sortedSetIds.length >= targetSetNumber) {
-            effectiveSetId = sortedSetIds[targetSetNumber - 1];
+        // Get the set by target number from user's specific sets
+        const userSets = user.userSpecificSets || [];
+        if (userSets.length >= targetSetNumber) {
+            const targetSet = userSets[targetSetNumber - 1];
+            effectiveSetId = targetSet.setId;
+            setLabel = targetSet.label;
         } else {
+            // Create new set
             effectiveSetId = uuidv4();
+            setLabel = `Set-${userSets.length + 1}`;
+            if (!user.userSpecificSets) {
+                user.userSpecificSets = [];
+            }
+            user.userSpecificSets.push({ setId: effectiveSetId, label: setLabel });
+            user.markModified('userSpecificSets');
+            await user.save();
         }
     } else {
+        // Create new set
         effectiveSetId = uuidv4();
+        const userSets = user.userSpecificSets || [];
+        setLabel = `Set-${userSets.length + 1}`;
+        if (!user.userSpecificSets) {
+            user.userSpecificSets = [];
+        }
+        user.userSpecificSets.push({ setId: effectiveSetId, label: setLabel });
+        user.markModified('userSpecificSets');
+        await user.save();
     }
 
     try {
@@ -154,7 +167,7 @@ export const generateAiQuestions = async (req: Request, res: Response) => {
                         source: 'AI',
                         generatedBy,
                         questionCount: count,
-                        setid: effectiveSetId
+                        setid: String(effectiveSetId)
                     });
 
                     await aiQuestion.save();
@@ -172,8 +185,8 @@ export const generateAiQuestions = async (req: Request, res: Response) => {
         res.json({
             message: 'AI questions generated successfully',
             count: generatedQuestions.length,
-            questions: generatedQuestions,
-            setid: effectiveSetId
+            setId: String(effectiveSetId),
+            setLabel: setLabel
         });
     } catch (error) {
         console.error('Error generating AI questions:', error);
@@ -188,8 +201,14 @@ export const getUserSets = async (req: Request, res: Response) => {
             return res.status(400).json({ message: 'Missing userId' });
         }
 
-        const sets = await AIQuestions.distinct("setid", { generatedBy: userId });
-        res.json({ sets });
+        const User = mongoose.model('User');
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const userSets = user.userSpecificSets || [];
+        res.json({ sets: userSets });
     } catch (error) {
         console.error('Error fetching user sets:', error);
         res.status(500).json({ message: 'Server error' });
@@ -224,25 +243,16 @@ export const getAllAiQuestions = async (req: Request, res: Response) => {
         if (setNumber) {
             const setNumberInt = parseInt(setNumber as string);
             if (setNumberInt > 0) {
-                const allQuestionsForSetMapping = await AIQuestions.find().populate('generatedBy', 'name').populate('assignedTo', 'name');
-                const candidateSets = new Map<string, Map<string, Date>>();
-                allQuestionsForSetMapping.forEach((q: any) => {
-                    const name = (q.generatedBy?.name || q.assignedTo?.name) ?? 'Not Assigned';
-                    if (!candidateSets.has(name)) candidateSets.set(name, new Map<string, Date>());
-                    if (q.setid) {
-                        const current = candidateSets.get(name)!;
-                        const date = new Date(q.createdAt);
-                        if (!current.has(q.setid) || date < current.get(q.setid)!) {
-                            current.set(q.setid, date);
-                        }
-                    }
-                });
-
+                // Get all users and find sets by label
+                const User = mongoose.model('User');
+                const users = await User.find({});
                 const matchingSetIds: string[] = [];
-                candidateSets.forEach((setMap) => {
-                    const sortedSets = Array.from(setMap.entries()).sort((a, b) => a[1].getTime() - b[1].getTime()).map(e => e[0]);
-                    if (setNumberInt <= sortedSets.length) {
-                        matchingSetIds.push(sortedSets[setNumberInt - 1]);
+                
+                users.forEach((user: any) => {
+                    const userSets = user.userSpecificSets || [];
+                    const targetSet = userSets.find((s: any) => s.label === `Set-${setNumberInt}`);
+                    if (targetSet) {
+                        matchingSetIds.push(targetSet.setId);
                     }
                 });
 

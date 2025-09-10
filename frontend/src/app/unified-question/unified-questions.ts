@@ -54,7 +54,7 @@ export class UnifiedQuestionsComponent implements OnInit {
   // Accepted Questions
   acceptedQuestions: AcceptedQuestion[] = [];
   allQuestionsForSetMapping: AcceptedQuestion[] = [];
-  globalSetMappings: Map<string, Map<string, number>> = new Map();
+  setLabelMappings: Map<string, string> = new Map();
 
   // Common properties
   loading = true;
@@ -94,6 +94,7 @@ export class UnifiedQuestionsComponent implements OnInit {
   async loadAllData(): Promise<void> {
     this.loading = true;
     await Promise.all([
+      this.loadSetLabelMappings(),
       this.loadAllQuestionsForSetMapping(),
       this.loadAIQuestions(),
       this.loadAcceptedQuestions()
@@ -125,12 +126,6 @@ export class UnifiedQuestionsComponent implements OnInit {
       if (this.candidateNameSearch.trim()) params.candidateName = this.candidateNameSearch;
       if (this.selectedSetNumber) params.setNumber = this.selectedSetNumber;
 
-      // 📍 DEBUG: Log frontend parameters
-      console.log('=== DEBUG: Frontend Params ===');
-      console.log('candidateNameSearch:', this.candidateNameSearch);
-      console.log('selectedSetNumber:', this.selectedSetNumber);
-      console.log('params being sent:', params);
-      console.log('==============================');
 
       const queryString = Object.keys(params)
         .map(key => `${key}=${encodeURIComponent(params[key])}`)
@@ -138,18 +133,10 @@ export class UnifiedQuestionsComponent implements OnInit {
 
       const url = `${environment.apiUrl}/ai-quiz/all-ai-questions${queryString ? '?' + queryString : ''}`;
 
-      // 📍 DEBUG: Log final URL
-      console.log('=== DEBUG: API URL ===');
-      console.log('Final URL:', url);
-      console.log('======================');
 
       const response: any = await firstValueFrom(this.http.get(url, { headers }));
 
-      // 📍 DEBUG: Log response
-      console.log('=== DEBUG: API Response ===');
-      console.log('Response:', response);
-      console.log('Questions count:', response.questions ? response.questions.length : 'No questions array');
-      console.log('============================');
+
 
       // Handle both old and new response formats
       if (response.questions) {
@@ -236,73 +223,9 @@ export class UnifiedQuestionsComponent implements OnInit {
   }
 
   updateSetOptions(): void {
-    // Build global set mappings for consistent numbering
-    this.globalSetMappings.clear();
-
-    // Collect all questions with their creation dates
-    const allQuestions = [...this.allQuestionsForSetMapping, ...this.aiQuestions];
-
-    // Group questions by candidate
-    const candidateQuestions = new Map<string, any[]>();
-
-    allQuestions.forEach(q => {
-      const candidateName = q.assignedTo?.name || q.generatedBy?.name || 'Not Assigned';
-
-      if (!candidateQuestions.has(candidateName)) {
-        candidateQuestions.set(candidateName, []);
-      }
-      candidateQuestions.get(candidateName)!.push(q);
-    });
-
-    // Process each candidate's questions to build set mappings
-    candidateQuestions.forEach((questions, candidateName) => {
-      // Determine earliest creation time per set to ensure stable ordering
-      const setEarliestCreatedAt = new Map<string, number>();
-
-      questions.forEach(q => {
-        if (q.setid) {
-          const created = new Date(q.createdAt || 0).getTime();
-          if (!setEarliestCreatedAt.has(q.setid)) {
-            setEarliestCreatedAt.set(q.setid, created);
-          } else {
-            const prev = setEarliestCreatedAt.get(q.setid)!;
-            if (created < prev) {
-              setEarliestCreatedAt.set(q.setid, created);
-            }
-          }
-        }
-      });
-
-      // Sort set IDs by earliest creation date
-      const sortedSetIds = Array.from(setEarliestCreatedAt.keys()).sort((a, b) => {
-        const aDate = setEarliestCreatedAt.get(a) ?? 0;
-        const bDate = setEarliestCreatedAt.get(b) ?? 0;
-
-        // If creation dates are very close (within 1 minute), sort by setid for consistency
-        if (Math.abs(aDate - bDate) < 60000) {
-          return a.localeCompare(b);
-        }
-        return aDate - bDate;
-      });
-
-
-      // Create mapping for this candidate
-      const candidateSetMapping = new Map<string, number>();
-      sortedSetIds.forEach((setid, index) => {
-        candidateSetMapping.set(setid, index + 1);
-      });
-
-      this.globalSetMappings.set(candidateName, candidateSetMapping);
-    });
-
-    // Calculate maximum sets for dropdown options
-    let maxSets = 0;
-    this.globalSetMappings.forEach(candidateSets => {
-      maxSets = Math.max(maxSets, candidateSets.size);
-    });
-
+    // Simple set options based on available sets
     this.setOptions = [];
-    for (let i = 1; i <= maxSets; i++) {
+    for (let i = 1; i <= 10; i++) {
       this.setOptions.push({ number: i, displayName: `Set ${i}` });
     }
   }
@@ -466,14 +389,36 @@ export class UnifiedQuestionsComponent implements OnInit {
   }
 
   // Utility methods
+  async loadSetLabelMappings(): Promise<void> {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
+      
+      // Get all users to build set label mappings
+      const response: any = await firstValueFrom(
+        this.http.get(`${environment.apiUrl}/admin/users?page=0&limit=10000`, { headers })
+      );
+      
+      const users = response.users || [];
+      this.setLabelMappings.clear();
+      
+      users.forEach((user: any) => {
+        if (user.userSpecificSets && Array.isArray(user.userSpecificSets)) {
+          user.userSpecificSets.forEach((userSet: any) => {
+            this.setLabelMappings.set(userSet.setId, userSet.label);
+          });
+        }
+      });
+    } catch (error) {
+      console.error('Error loading set label mappings:', error);
+    }
+  }
+
   getSetDisplayName(setid: string | undefined, candidateName?: string): string {
-    if (!setid || !candidateName) return 'N/A';
-
-    const candidateSets = this.globalSetMappings.get(candidateName);
-    if (!candidateSets) return 'Unknown Set';
-
-    const setNumber = candidateSets.get(setid);
-    return setNumber ? `Set ${setNumber}` : 'Unknown Set';
+    if (!setid) return 'N/A';
+    return this.setLabelMappings.get(setid) || 'Unknown Set';
   }
 
   showQuestionDetails(question: AIQuestion | AcceptedQuestion): void {

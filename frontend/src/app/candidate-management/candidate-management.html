@@ -207,8 +207,8 @@
                 <select [(ngModel)]="user.assignedSetId" (change)="onSetSelectionChange(user._id, $event)"
                   class="px-2 py-1 border border-gray-300 dark:border-gray-700 rounded-md text-sm focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white">
                   <option [value]="null">No Set Assigned</option>
-                  <option *ngFor="let setId of getUserAvailableSets(user._id); let i = index" [value]="setId">
-                    Set {{ i + 1 }}
+                  <option *ngFor="let set of getUserAvailableSets(user._id); let i = index" [value]="set.setId">
+                    {{ set.label }}
                   </option>
                 </select>
               </td>
@@ -304,8 +304,8 @@
                   (focus)="loadUserSetsForDropdown(user._id)"
                   class="px-2 py-1 border border-gray-300 dark:border-gray-700 rounded-md text-sm focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white">
                   <option [value]="null">No Set Assigned</option>
-                  <option *ngFor="let setId of getUserAvailableSets(user._id); let i = index" [value]="setId">
-                    Set {{ i + 1 }}
+                  <option *ngFor="let set of getUserAvailableSets(user._id); let i = index" [value]="set.setId">
+                    {{ set.label }}
                   </option>
                 </select>
               </td>
@@ -561,8 +561,8 @@
           <select [(ngModel)]="selectedSetId"
             class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:text-white">
             <option value="" disabled>Choose a set...</option>
-            <option *ngFor="let setId of availableSetIds; let i = index" [value]="setId">
-              Set {{ i + 1 }}
+            <option *ngFor="let set of availableSetIds; let i = index" [value]="set.setId">
+              {{ set.label }}
             </option>
           </select>
         </div>

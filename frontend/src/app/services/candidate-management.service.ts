@@ -65,8 +65,8 @@ export class CandidateManagementService {
     });
   }
 
-  getUserSets(userId: string): Observable<{ sets: string[] }> {
-      return this.http.get<{ sets: string[] }>(`${environment.apiUrl}/ai-quiz/user-sets/${userId}`, { headers: this.getAuthHeaders() });
+  getUserSets(userId: string): Observable<{ sets: { setId: string; label: string }[] }> {
+      return this.http.get<{ sets: { setId: string; label: string }[] }>(`${environment.apiUrl}/ai-quiz/user-sets/${userId}`, { headers: this.getAuthHeaders() });
   }
 
   generateAIQuestions(payload: any): Observable<any> {

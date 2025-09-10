@@ -38,8 +38,7 @@ export class CandidateManagement implements OnInit {
   totalUsers: number = 0;
   searchTerm: string = '';
 
-  allAvailableSets: string[] = [];
-  userSpecificSets: { [userId: string]: string[] } = {};
+  userSpecificSets: { [userId: string]: { setId: string; label: string }[] } = {};
   userSetsLoaded: { [userId: string]: boolean } = {};
 
   showAITestModal: boolean = false;
@@ -48,7 +47,7 @@ export class CandidateManagement implements OnInit {
   isGeneratingAIQuestions: boolean = false;
 
   showSuccessModal: boolean = false;
-  availableSetIds: string[] = [];
+  availableSetIds: { setId: string; label: string }[] = [];
   selectedSetId: string = '';
   showSetChoiceModal: boolean = false;
   useExistingSet: boolean = false;
@@ -355,7 +354,7 @@ export class CandidateManagement implements OnInit {
 
     if (user?._id) {
       this.candidateService.getUserSets(user._id).subscribe({
-        next: (res: { sets: string[] }) => {
+        next: (res: { sets: { setId: string; label: string }[] }) => {
           this.availableSetIds = res.sets || [];
           if (this.availableSetIds.length > 0) {
             this.showSetChoiceModal = true;
@@ -501,13 +500,13 @@ export class CandidateManagement implements OnInit {
     this.updateAssignedSetImmediate(userId, setIdToSend);
   }
 
-  loadUserSets(userId: string): Promise<string[]> {
+  loadUserSets(userId: string): Promise<{ setId: string; label: string }[]> {
     if (this.userSetsLoaded[userId]) {
       return Promise.resolve(this.userSpecificSets[userId] || []);
     }
     return new Promise((resolve) => {
       this.candidateService.getUserSets(userId).subscribe({
-        next: (response: { sets: string[] }) => {
+        next: (response: { sets: { setId: string; label: string }[] }) => {
           const userSets = response.sets || [];
           this.userSpecificSets[userId] = userSets;
           this.userSetsLoaded[userId] = true;
@@ -545,16 +544,16 @@ export class CandidateManagement implements OnInit {
     });
   }
 
-  getUserAvailableSets = (userId: string): string[] => this.userSpecificSets[userId] || [];
+  getUserAvailableSets = (userId: string): { setId: string; label: string }[] => this.userSpecificSets[userId] || [];
 
   getSetDisplayForUser(user: User): string {
     if (!user.assignedSetId) return 'No Set Assigned';
     const userSets = this.getUserAvailableSets(user._id);
-    const setIndex = userSets.indexOf(user.assignedSetId);
-    return setIndex !== -1 ? `Set ${setIndex + 1}` : 'Unknown Set';
+    const userSet = userSets.find(s => s.setId === user.assignedSetId);
+    return userSet ? userSet.label : 'Unknown Set';
   }
 
-  getSelectedSetIndex = (assignedSetId: string): string => (assignedSetId && this.allAvailableSets.includes(assignedSetId)) ? assignedSetId : '';
+  getSelectedSetIndex = (assignedSetId: string): string => assignedSetId || '';
 
   loadUserSetsForDropdown(userId: string): void {
     if (!this.userSetsLoaded[userId]) {
