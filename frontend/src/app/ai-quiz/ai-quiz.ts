@@ -180,13 +180,16 @@ export class AIQuizComponent implements OnInit, OnDestroy {
 
     this.timer = this.questionTimers[q._id];
     this.timerInterval = setInterval(() => {
-      this.timer--;
-      this.questionTimers[q._id] = this.timer;
-      this.saveQuizState();
+      if (this.timer > 0) {           // Add this check
+        this.timer--;
+        this.questionTimers[q._id] = this.timer;
+        this.saveQuizState();
+      }
       if (this.timer <= 0) {
         this.handleTimerExpire();
       }
     }, 1000);
+
   }
 
   clearTimer() {

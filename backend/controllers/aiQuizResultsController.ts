@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import AIResult from '../models/AIResult';
 import User from '../models/User';
 import mongoose from 'mongoose';
+import { publishQuizSubmitted } from '../natsClient';
 
 export const submitAiQuiz = async (req: Request, res: Response) => {
     const { userId, questionResponses } = req.body;
@@ -64,6 +65,25 @@ export const submitAiQuiz = async (req: Request, res: Response) => {
             aiQuizCompleted: true,
             nextAttemptNumber: currentAttemptNumber + 1
         });
+
+        // Publish to NATS after successful save
+        try {
+            await publishQuizSubmitted({
+                userId: userId,
+                userName: user.name,
+                userEmail: user.email,
+                totalQuestions: totalQuestions,
+                totalCorrect: totalCorrect,
+                overallPercentage: overallPercentage,
+                attemptNumber: currentAttemptNumber,
+                resultId: aiResult._id,
+                quizType: 'AI Quiz'
+            });
+            console.log(' Published AI quiz submission to NATS');
+        } catch (natsError) {
+            console.error(' Failed to publish AI quiz to NATS:', natsError);
+            // Don't fail the API response if NATS fails
+        }
 
         res.json({
             message: 'AI Quiz result saved successfully',

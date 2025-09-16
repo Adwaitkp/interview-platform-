@@ -1,5 +1,4 @@
-<div class="p-6"
-  style="margin-left: var(--sidebar-width, 16rem);">
+<div class="p-6" style="margin-left: var(--sidebar-width, 16rem);">
   <div class="max-w-4xl mx-auto">
 
     <!-- Loading State -->
@@ -9,11 +8,12 @@
     </div>
 
     <!-- No Skills/Levels Message -->
-    <div *ngIf="!loading && (skills.length === 0 || levels.length === 0)" class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center">
+    <div *ngIf="!loading && (skills.length === 0 || levels.length === 0)"
+      class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center">
       <div class="text-gray-500 dark:text-gray-400 mb-4">
         <svg class="mx-auto h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
         </svg>
       </div>
       <h3 class="text-xl font-medium text-gray-900 dark:text-gray-100 mb-2">No Questions assign</h3>
@@ -21,85 +21,102 @@
     </div>
 
     <!-- No Questions Assigned Message -->
-    <div *ngIf="!loading && skills.length > 0 && levels.length > 0 && questions.length === 0 && !quizCompleted" class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center">
+    <div *ngIf="!loading && skills.length > 0 && levels.length > 0 && questions.length === 0 && !quizCompleted"
+      class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center">
       <div class="text-gray-500 dark:text-gray-400 mb-4">
         <svg class="mx-auto h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
         </svg>
       </div>
       <h3 class="text-xl font-medium text-gray-900 dark:text-gray-100 mb-2">No questions assigned</h3>
-      <p class="text-gray-600 dark:text-gray-300">Your quiz has been reset. Please contact your admin to assign new questions.</p>
+      <p class="text-gray-600 dark:text-gray-300">Your quiz has been reset. Please contact your admin to assign new
+        questions.</p>
     </div>
 
     <!-- Single Quiz Flow -->
     <div *ngIf="!loading && skills.length > 0 && levels.length > 0">
-      
+
       <!-- Show Questions - Single Continuous Quiz -->
       <div *ngIf="testStarted && !quizCompleted && questions.length > 0">
         <div class="mb-4 p-2 bg-yellow-50 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 text-sm">
           Question {{ currentQuestionIndex + 1 }} of {{ questions.length }}
         </div>
-        
+
         <!-- Timer -->
         <div class="mb-4 flex items-center justify-center">
           <span class="text-lg font-bold text-red-600 dark:text-red-400">Time Left: {{ formattedTimer }}</span>
         </div>
-          
-          <!-- Current Question -->
-        <div *ngIf="currentQuestion" class="mb-8 p-6 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800">
+
+        <!-- Current Question -->
+        <div *ngIf="currentQuestion"
+          class="mb-8 p-6 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800">
           <!-- Question Info -->
           <div class="mb-4 text-sm text-gray-600 dark:text-gray-400">
-            <span class="bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200 px-2 py-1 rounded mr-2">{{ currentQuestion.skill }}</span>
-            <span class="bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-200 px-2 py-1 rounded">{{ currentQuestion.level | titlecase }}</span>
+            <span class="bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200 px-2 py-1 rounded mr-2">{{
+              currentQuestion.skill }}</span>
+            <span class="bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-200 px-2 py-1 rounded">{{
+              currentQuestion.level | titlecase }}</span>
           </div>
-          
-          <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">{{ currentQuestionIndex + 1 }}. {{ currentQuestion.question }}</h3>
+
+          <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">{{ currentQuestionIndex + 1 }}. {{
+            currentQuestion.question }}</h3>
           <div class="space-y-3">
             <label *ngFor="let option of getOptions(currentQuestion); trackBy: trackByOptionKey"
-                   class="flex items-center p-3 border border-gray-200 dark:border-gray-600 rounded-md transition duration-200"
-                   [class.bg-blue-50]="selectedAnswer === option.key && !lockedQuestions[currentQuestion._id]"
-                   [class.dark:bg-blue-900]="selectedAnswer === option.key && !lockedQuestions[currentQuestion._id]"
-                   [class.border-blue-500]="selectedAnswer === option.key && !lockedQuestions[currentQuestion._id]"
-                   [class.dark:border-blue-400]="selectedAnswer === option.key && !lockedQuestions[currentQuestion._id]"
-                   [class.cursor-pointer]="!lockedQuestions[currentQuestion._id]"
-                   [class.cursor-not-allowed]="lockedQuestions[currentQuestion._id]"
-                   [class.opacity-60]="lockedQuestions[currentQuestion._id]"
-                   [class.hover:bg-gray-50]="!lockedQuestions[currentQuestion._id]"
-                   [class.dark:hover:bg-gray-700]="!lockedQuestions[currentQuestion._id]"
-                   (click)="!lockedQuestions[currentQuestion._id] ? onAnswerSelect(option.key) : null">
-              <input type="radio"
-                     [name]="'question_' + currentQuestion._id"
-                     [value]="option.key"
-                     [(ngModel)]="selectedAnswer"
-                     (change)="!lockedQuestions[currentQuestion._id] ? onAnswerSelect(option.key) : null"
-                     [class.cursor-pointer]="!lockedQuestions[currentQuestion._id]"
-                     [class.cursor-not-allowed]="lockedQuestions[currentQuestion._id]"
-                     class="h-4 w-4 text-blue-600 dark:text-blue-400 focus:ring-blue-500 dark:focus:ring-blue-400 border-gray-300 dark:border-gray-600"
-                     [disabled]="lockedQuestions[currentQuestion._id]">
+              class="flex items-center p-3 border border-gray-200 dark:border-gray-600 rounded-md transition duration-200"
+              [class.bg-blue-50]="selectedAnswer === option.key && !lockedQuestions[currentQuestion._id]"
+              [class.dark:bg-blue-900]="selectedAnswer === option.key && !lockedQuestions[currentQuestion._id]"
+              [class.border-blue-500]="selectedAnswer === option.key && !lockedQuestions[currentQuestion._id]"
+              [class.dark:border-blue-400]="selectedAnswer === option.key && !lockedQuestions[currentQuestion._id]"
+              [class.cursor-pointer]="!lockedQuestions[currentQuestion._id]"
+              [class.cursor-not-allowed]="lockedQuestions[currentQuestion._id]"
+              [class.opacity-60]="lockedQuestions[currentQuestion._id]"
+              [class.hover:bg-gray-50]="!lockedQuestions[currentQuestion._id]"
+              [class.dark:hover:bg-gray-700]="!lockedQuestions[currentQuestion._id]"
+              (click)="!lockedQuestions[currentQuestion._id] ? onAnswerSelect(option.key) : null">
+              <input type="radio" [name]="'question_' + currentQuestion._id" [value]="option.key"
+                [(ngModel)]="selectedAnswer"
+                (change)="!lockedQuestions[currentQuestion._id] ? onAnswerSelect(option.key) : null"
+                [class.cursor-pointer]="!lockedQuestions[currentQuestion._id]"
+                [class.cursor-not-allowed]="lockedQuestions[currentQuestion._id]"
+                class="h-4 w-4 text-blue-600 dark:text-blue-400 focus:ring-blue-500 dark:focus:ring-blue-400 border-gray-300 dark:border-gray-600"
+                [disabled]="lockedQuestions[currentQuestion._id]">
               <span class="ml-3 text-gray-700 dark:text-gray-200"
-                    [class.cursor-pointer]="!lockedQuestions[currentQuestion._id]"
-                    [class.cursor-not-allowed]="lockedQuestions[currentQuestion._id]">
+                [class.cursor-pointer]="!lockedQuestions[currentQuestion._id]"
+                [class.cursor-not-allowed]="lockedQuestions[currentQuestion._id]">
                 {{ option.key.toLowerCase() }}. {{ option.value }}
               </span>
             </label>
           </div>
           <div *ngIf="lockedQuestions[currentQuestion._id]" class="mt-2 flex justify-center">
-            <span class="text-red-600 dark:text-red-400 font-semibold text-center">Time's up! You cannot change your answer.</span>
+            <span class="text-red-600 dark:text-red-400 font-semibold text-center">Time's up! You cannot change your
+              answer.</span>
           </div>
         </div>
-        
-        <!-- Navigation Arrows -->
-        <div class="flex justify-between items-center mb-4">
-          <button (click)="prevQuestion()" 
-                  [disabled]="currentQuestionIndex === 0" 
-                  class="bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 text-gray-800 dark:text-gray-200 font-bold py-2 px-4 rounded-l disabled:opacity-50 disabled:cursor-not-allowed">
-            &#8592; Previous
+
+
+        <!-- Arrow Buttons positioned at question center -->
+        <div class="relative">
+          <!-- Left Arrow Button -->
+          <button (click)="prevQuestion()" [disabled]="currentQuestionIndex === 0"
+            class="fixed bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 px-4 rounded-full disabled:opacity-50 disabled:cursor-not-allowed z-10"
+            style="left: 200px; top: 50%; transform: translateY(-50%);">
+            ◁
           </button>
-          <button (click)="currentQuestionIndex === questions.length - 1 ? submitQuiz() : nextQuestion()" 
-                  [disabled]="isSubmitting"
-                  class="bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 text-gray-800 dark:text-gray-200 font-bold py-2 px-4 rounded-r disabled:opacity-50 disabled:cursor-not-allowed">
-            {{ currentQuestionIndex === questions.length - 1 ? 'Submit Quiz' : 'Next' }} &#8594;
+
+          <!-- Right Arrow Button -->
+          <button (click)="nextQuestion()" [disabled]="currentQuestionIndex === questions.length - 1"
+            class="fixed bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 px-4 rounded-full disabled:opacity-50 disabled:cursor-not-allowed z-10"
+            style="right: 200px; top: 50%; transform: translateY(-50%);">
+            ▷
+          </button>
+        </div>
+
+        <!-- Submit Button stays below -->
+        <div class="flex justify-end mb-4">
+          <button (click)="submitQuiz()" [disabled]="isSubmitting"
+            class="bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 text-white font-bold py-3 px-6 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">
+            Submit Quiz
           </button>
         </div>
       </div>
@@ -107,10 +124,12 @@
       <!-- Quiz Complete -->
       <div *ngIf="quizCompleted" class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center">
         <div class="mb-6">
-          <div class="inline-flex items-center justify-center w-20 h-20 bg-green-100 dark:bg-green-800 rounded-full mb-4">
-            <svg class="w-10 h-10 text-green-600 dark:text-green-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div
+            class="inline-flex items-center justify-center w-20 h-20 bg-green-100 dark:bg-green-800 rounded-full mb-4">
+            <svg class="w-10 h-10 text-green-600 dark:text-green-300" fill="none" viewBox="0 0 24 24"
+              stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
           <h2 class="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-4">Quiz Completed!</h2>

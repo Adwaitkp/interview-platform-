@@ -7,11 +7,9 @@ const sc = StringCodec();
 async function getConnection() {
   if (!nc) {
     nc = await connect({
-      servers: process.env.NATS_URL || "nats://10.149.185.246:4222",
+      servers: process.env.NATS_URL || "nats://192.168.137.1:4222",
     });
-    console.log("✅ Connected to NATS");
-
-    // JetStream context banao
+    console.log(" Connected to NATS");
     js = nc.jetstream();
   }
   return { nc, js };
@@ -22,11 +20,7 @@ export async function publishQuizSubmitted(payload: any) {
     const { js } = await getConnection();
 
     console.log(" Publishing payload to JetStream...");
-
-    // JSON encode payload
     const data = sc.encode(JSON.stringify(payload));
-
-    // JetStream me publish karo
     const ack = await js.publish("quiz.submitted", data);
 
     console.log(" Published to quiz.submitted", {
@@ -34,6 +28,6 @@ export async function publishQuizSubmitted(payload: any) {
       seq: ack.seq,
     });
   } catch (err) {
-    console.error("❌ Failed to publish quiz.submitted:", err);
+    console.error(" Failed to publish quiz.submitted:", err);
   }
 }

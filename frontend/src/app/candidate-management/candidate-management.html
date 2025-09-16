@@ -1,6 +1,4 @@
-<div
-  class="p-6"
-  style="margin-left: var(--sidebar-width, 16rem);">
+<div class="p-6" style="margin-left: var(--sidebar-width, 16rem);">
   <div class="flex justify-between items-center mb-4">
     <h1 class="text-2xl font-bold dark:text-white">Candidate Management</h1>
   </div>
@@ -105,11 +103,9 @@
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-          <tr *ngFor="let user of paginatedUsers; trackBy: trackByUserId; let i = index" [ngStyle]="{
-              'background-color': i % 2 === 0 ? 'white' : 'rgb(249, 250, 251)',
-              '--tw-bg-opacity': '1'
-            }" class="hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150"
-            [class.dark\:bg-gray-900]="i % 2 === 0" [class.dark\:bg-gray-800]="i % 2 !== 0">
+          <tr *ngFor="let user of paginatedUsers; trackBy: trackByUserId; let i = index"
+            class="hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150">
+            
             <!-- Edit Mode -->
             <ng-container *ngIf="editUserId === user._id">
               <td class="px-6 py-4">

@@ -14,6 +14,7 @@ export class HeaderComponent implements OnInit {
   name: string = '';
   role: string = '';
   sidebarExpanded: boolean = false; // Start expanded by default
+  isDarkMode: boolean = false;
 
   constructor(private router: Router, private eRef: ElementRef) { }
 
@@ -21,6 +22,7 @@ export class HeaderComponent implements OnInit {
     this.name = localStorage.getItem('name') || 'User';
     this.role = localStorage.getItem('role') || '';
     this.updateSidebarWidth();
+    this.initializeDarkMode();
   }
 
   // Toggle sidebar between expanded and collapsed
@@ -39,6 +41,58 @@ export class HeaderComponent implements OnInit {
     const width = this.sidebarExpanded ? '16rem' : '4rem';
     document.documentElement.style.setProperty('--sidebar-width', width);
   }
+
+  // Initialize dark mode from localStorage or default to false
+// Initialize dark mode from localStorage or default to false
+private initializeDarkMode(): void {
+  // Check for saved theme preference or default to 'light'
+  const savedTheme = localStorage.getItem('color-theme');
+  const legacyDarkMode = localStorage.getItem('darkMode');
+  
+  // Determine initial dark mode state
+  if (savedTheme === 'dark') {
+    this.isDarkMode = true;
+  } else if (savedTheme === 'light') {
+    this.isDarkMode = false;
+  } else if (legacyDarkMode === 'true') {
+    this.isDarkMode = true;
+  } else {
+    // Default to light mode
+    this.isDarkMode = false;
+  }
+  
+  // Apply the theme immediately
+  this.applyDarkMode();
+  console.log('[Theme] Initialized. isDarkMode =', this.isDarkMode);
+}
+
+// Toggle dark mode
+toggleDarkMode(): void {
+  this.isDarkMode = !this.isDarkMode;
+  localStorage.setItem('color-theme', this.isDarkMode ? 'dark' : 'light');
+  
+  // Remove legacy key if it exists
+  localStorage.removeItem('darkMode');
+  
+  this.applyDarkMode();
+}
+
+
+private applyDarkMode(): void {
+  const html = document.documentElement;
+
+  if (this.isDarkMode) {
+    html.classList.add('dark');
+  } else {
+    html.classList.remove('dark');
+  }
+
+  // Debugging log to confirm the class is present (you can remove later)
+  setTimeout(() => {
+    console.log('[Theme] Applied. html.classList =', html.className);
+  }, 50);
+}
+
 
   navigateTo(target: string): void {
     switch (target) {

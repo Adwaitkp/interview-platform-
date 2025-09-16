@@ -1,19 +1,17 @@
 @import "tailwindcss";
 
-html, body {
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+html {  
   @apply bg-white dark:bg-gray-900;
   min-height: 100vh; /* poora screen cover karega */
+  transition: background-color 0.5s ease, color 0.5s ease;
 }
 
-
-
-table tbody tr {
-    background-color: transparent !important;
-}
-
-
-.dark\:bg-gray-750 {
-    background-color: rgb(55 65 81) !important; 
+/* Keep body neutral to avoid overriding html theme */
+body {
+  min-height: 100vh;
 }
 
 /* Common Utility Classes */
