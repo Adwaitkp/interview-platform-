@@ -117,7 +117,7 @@ export const deleteUser = async (req: Request, res: Response) => {
       User.findByIdAndDelete(req.params.id),
       Result.deleteMany({ userEmail: user.email }),
       AIResult.deleteMany({ userEmail: user.email }),
-      AIQuestions.deleteMany({ assignedTo: req.params.id })
+      AIQuestions.deleteMany({ $or: [{ assignedTo: req.params.id }, { generatedBy: req.params.id }] })
     ]);
 
     res.status(200).json({

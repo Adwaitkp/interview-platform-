@@ -23,6 +23,7 @@ export class AIQuizComponent implements OnInit, OnDestroy {
   questionTimeMap: { [level: string]: number } = { 'beginner': 90, 'intermediate': 120, 'advanced': 150 };
   questionTimers: { [key: string]: number } = {};
   lockedQuestions: { [key: string]: boolean } = {};
+  shuffledOptions: { [questionId: string]: Array<{ key: string; value: string }> } = {};
   loading = false;
 
   constructor(private aiQuizService: AIQuizService, private cdr: ChangeDetectorRef) { }
@@ -53,13 +54,13 @@ export class AIQuizComponent implements OnInit, OnDestroy {
   }
 
   private applyState(state: QuizState) {
-    this.questionTimers = state.questionTimers;
-    this.currentQuestionIndex = state.currentQuestionIndex;
-    this.lockedQuestions = state.lockedQuestions;
-    this.userAnswers = state.userAnswers;
-    this.testStarted = state.testStarted;
-
-  }
+  this.questionTimers = state.questionTimers;
+  this.currentQuestionIndex = state.currentQuestionIndex;
+  this.lockedQuestions = state.lockedQuestions;
+  this.userAnswers = state.userAnswers;
+  this.testStarted = state.testStarted;
+  this.restoreShuffledOptions();
+}
 
   loadQuestions() {
     this.loading = true;
@@ -70,11 +71,41 @@ export class AIQuizComponent implements OnInit, OnDestroy {
     }
 
     this.aiQuizService.fetchApprovedQuestions(userId).subscribe(questions => {
-      this.questions = questions;
-      this.loading = false;
-      this.initializeQuizAfterLoad();
-    });
+  this.questions = questions;
+  this.applyPersistedOrder(); // Apply shuffling after loading
+  this.loading = false;
+  this.initializeQuizAfterLoad();
+});
   }
+  private applyPersistedOrder() {
+  const userId = this.aiQuizService.getUserIdFromToken();
+  if (!userId || this.questions.length === 0) return;
+
+  const orderKey = `aiQuestionOrder_${userId}`;
+  const savedOrder = localStorage.getItem(orderKey);
+
+  if (savedOrder) {
+    const ids: string[] = JSON.parse(savedOrder);
+    const pos = new Map(ids.map((id, i) => [id, i]));
+    this.questions.sort(
+      (a, b) =>
+        (pos.get(a._id) ?? Number.MAX_SAFE_INTEGER) -
+        (pos.get(b._id) ?? Number.MAX_SAFE_INTEGER)
+    );
+    return;
+  }
+
+  // No saved order yet: shuffle once and persist
+  this.shuffleQuestionsOnce();
+  localStorage.setItem(orderKey, JSON.stringify(this.questions.map((q) => q._id)));
+}
+
+private shuffleQuestionsOnce() {
+  for (let i = this.questions.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [this.questions[i], this.questions[j]] = [this.questions[j], this.questions[i]];
+  }
+}
 
   private initializeQuizAfterLoad() {
     if (this.questions.length === 0 || this.quizCompleted) return;
@@ -157,12 +188,13 @@ export class AIQuizComponent implements OnInit, OnDestroy {
   }
 
   private resetQuizState() {
-    this.testStarted = false;
-    this.userAnswers = {};
-    this.lockedQuestions = {};
-    this.questionTimers = {};
-    this.currentQuestionIndex = 0;
-  }
+  this.testStarted = false;
+  this.userAnswers = {};
+  this.lockedQuestions = {};
+  this.questionTimers = {};
+  this.shuffledOptions = {};
+  this.currentQuestionIndex = 0;
+}
 
   initTimers() {
     this.questions.forEach(q => {
@@ -230,17 +262,18 @@ export class AIQuizComponent implements OnInit, OnDestroy {
     return -1;
   }
 
-  saveQuizState() {
-    const state: QuizState = {
-      questionTimers: this.questionTimers,
-      currentQuestionIndex: this.currentQuestionIndex,
-      lockedQuestions: this.lockedQuestions,
-      userAnswers: this.userAnswers,
-      testStarted: this.testStarted,
-      quizCompleted: this.quizCompleted
-    };
-    this.aiQuizService.saveQuizState(state);
-  }
+ saveQuizState() {
+  const state: QuizState = {
+    questionTimers: this.questionTimers,
+    currentQuestionIndex: this.currentQuestionIndex,
+    lockedQuestions: this.lockedQuestions,
+    userAnswers: this.userAnswers,
+    testStarted: this.testStarted,
+    quizCompleted: this.quizCompleted
+  };
+  this.aiQuizService.saveQuizState(state);
+  this.saveShuffledOptions();
+}
 
   submitQuiz() {
     this.clearTimer();
@@ -289,12 +322,36 @@ export class AIQuizComponent implements OnInit, OnDestroy {
     this.updateSelectedAnswerForCurrentQuestion();
   }
 
-  getOptions(q: any): { key: string; value: string }[] {
-    return q?.options ? Object.entries(q.options).map(([key, value]) => ({
-      key: key.toUpperCase(),
-      value: String(value)
-    })) : [];
+getOptions(q?: any): Array<{ key: string; value: string }> {
+  const qq = q || this.currentQuestion;
+  if (!qq) return [];
+
+  // Check if we already have shuffled options for this question
+  if (this.shuffledOptions[qq._id]) {
+    return this.shuffledOptions[qq._id];
   }
+
+  // Create original options
+  const originalOptions: Array<{ key: string; value: string }> = [];
+  if (qq.options) {
+    Object.entries(qq.options).forEach(([key, value]) => {
+      originalOptions.push({ key: key.toUpperCase(), value: String(value) });
+    });
+  }
+
+  // Shuffle the options using Fisher-Yates algorithm
+  const shuffled = [...originalOptions];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+
+  // Store shuffled options for this question
+  this.shuffledOptions[qq._id] = shuffled;
+  this.saveShuffledOptions();
+
+  return shuffled;
+}
 
   trackByOptionKey(index: number, option: any): string {
     return option.key || index;
@@ -305,4 +362,28 @@ export class AIQuizComponent implements OnInit, OnDestroy {
     const secs = this.timer % 60;
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   }
+  private saveShuffledOptions(): void {
+  const userId = this.aiQuizService.getUserIdFromToken();
+  if (!userId) return;
+  
+  localStorage.setItem(
+    `aiShuffledOptions_${userId}`,
+    JSON.stringify(this.shuffledOptions)
+  );
+}
+
+private restoreShuffledOptions(): void {
+  try {
+    const userId = this.aiQuizService.getUserIdFromToken();
+    if (!userId) return;
+    
+    const shuffled = localStorage.getItem(`aiShuffledOptions_${userId}`);
+    if (shuffled) {
+      this.shuffledOptions = JSON.parse(shuffled);
+    }
+  } catch {
+    // ignore parse errors
+    this.shuffledOptions = {};
+  }
+}
 }

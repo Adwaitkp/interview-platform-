@@ -4,7 +4,7 @@ import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule } from '@angular/forms';
-import { environment } from '../../environments/environment'; 
+import { environment } from '../../environments/environment';
 
 @Component({
   selector: 'app-login',
@@ -23,6 +23,36 @@ export class Login {
       password: ['', Validators.required],
     });
   }
+  private clearPreviousQuizState(newUserId: string): void {
+  const keysToRemove: string[] = [];
+  
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key) {
+      if (key === 'quizCompleted' || key === 'aiQuizCompleted') {
+        keysToRemove.push(key);
+      }
+      else if (key.includes('_') && !key.endsWith(`_${newUserId}`)) {
+        const isQuizKey = key.includes('questionTimers') || 
+                         key.includes('lockedQuestions') || 
+                         key.includes('userAnswers') || 
+                         key.includes('shuffledOptions') || 
+                         key.includes('currentQuestionIndex') || 
+                         key.includes('testStarted') || 
+                         key.includes('quizCompleted') ||
+                         key.includes('cachedQuestions') ||
+                         key.includes('userQuestionOrder');
+        if (isQuizKey) {
+          keysToRemove.push(key);
+        }
+      }
+    }
+  }
+  
+  keysToRemove.forEach(key => {
+    localStorage.removeItem(key);
+  });
+}
 
   togglePassword() {
     this.showPassword = !this.showPassword;
@@ -40,6 +70,7 @@ export class Login {
 
     this.http.post<any>(`${environment.apiUrl}/auth/login`, { email, password }).subscribe({
       next: (res) => {
+        this.clearPreviousQuizState(res.user.id);
         localStorage.setItem('token', res.token);
         localStorage.setItem('name', res.user.name);
         localStorage.setItem('email', res.user.email);

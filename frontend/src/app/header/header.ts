@@ -15,6 +15,7 @@ export class HeaderComponent implements OnInit {
   role: string = '';
   sidebarExpanded: boolean = false; // Start expanded by default
   isDarkMode: boolean = false;
+  showLogoutConfirmation = false;
 
   constructor(private router: Router, private eRef: ElementRef) { }
 
@@ -115,56 +116,58 @@ private applyDarkMode(): void {
     // Don't close sidebar when navigating - keep it in current state
   }
 
-  logout(): void {
-    // Preserve quiz state during logout
-    const quizStateKeys = [
-      // Normal quiz keys
-      'questionTimers',
-      'currentQuestionIndex',
-      'lockedQuestions',
-      'selectedOptions',
-      'userAnswers', // <-- added for answer persistence
-      'testStarted',
-      'quizCompleted',
-      'allQuestions',
-      // AI quiz keys
-      'aiQuestionTimers',
-      'aiCurrentQuestionIndex',
-      'aiLockedQuestions',
-      'aiSelectedOptions',
-      'aiTestStarted',
-      'aiQuizCompleted',
-      // Common keys
-      'skill',
-      'level',
-      'questionCounts'
-    ];
-
-    const preservedState: { [key: string]: string | null } = {};
-    quizStateKeys.forEach(key => {
-      preservedState[key] = localStorage.getItem(key);
-    });
-
-    localStorage.clear();
-
-    // Restore quiz state
-    Object.entries(preservedState).forEach(([key, value]) => {
-      if (value !== null) {
-        localStorage.setItem(key, value);
-      }
-    });
-
-    this.router.navigate(['/login']);
-    // this.profileOpen = false;
-    this.sidebarExpanded = true; // Reset to expanded for next login
+  confirmLogout(): void {
+    this.showLogoutConfirmation = true;
   }
 
+  cancelLogout(): void {
+    this.showLogoutConfirmation = false;
+  }
 
-  // @HostListener('document:mousedown', ['$event'])
-  // clickout(event: MouseEvent): void {
-  //   if (this.profileOpen && !this.eRef.nativeElement.contains(event.target)) {
-  //     this.profileOpen = false;
-  //   }
-  //   // Remove auto-close behavior for sidebar - let user control it manually
-  // }
+  proceedToLogout(): void {
+  this.showLogoutConfirmation = false;
+  
+  // Get current user ID to preserve their specific quiz state
+  const userId = localStorage.getItem('intervieweeId') || 'anon';
+  
+  // Preserve ALL user-specific quiz state keys (with userId suffix)
+  const userSpecificKeys: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.endsWith(`_${userId}`)) {
+      userSpecificKeys.push(key);
+    }
+  }
+  
+  // Also preserve these general keys
+  const generalKeys = ['skill', 'level', 'questionCounts'];
+  
+  // Store all data we want to preserve
+  const preservedState: { [key: string]: string | null } = {};
+  
+  userSpecificKeys.forEach(key => {
+    preservedState[key] = localStorage.getItem(key);
+  });
+  
+  generalKeys.forEach(key => {
+    preservedState[key] = localStorage.getItem(key);
+  });
+
+  // Clear only auth-related items instead of clearing everything
+  const authKeys = ['token', 'name', 'email', 'role', 'intervieweeId', 'color-theme'];
+  authKeys.forEach(key => {
+    localStorage.removeItem(key);
+  });
+
+  // Restore preserved quiz state
+  Object.entries(preservedState).forEach(([key, value]) => {
+    if (value !== null) {
+      localStorage.setItem(key, value);
+    }
+  });
+
+  this.router.navigate(['/login']);
+  this.sidebarExpanded = true;
+}
+
 }

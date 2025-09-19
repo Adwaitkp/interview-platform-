@@ -3,18 +3,14 @@ import { HttpClient } from '@angular/common/http';
 import { environment } from '../../environments/environment';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { firstValueFrom } from 'rxjs';
 
 interface QuizQuestion {
   _id: string;
   skill: string;
   level: string;
   question: string;
-  options: {
-    a: string;
-    b: string;
-    c: string;
-    d: string;
-  };
+  options: { a: string; b: string; c: string; d: string };
   correctanswer: string;
 }
 
@@ -25,6 +21,8 @@ interface QuizQuestion {
   templateUrl: './quiz.html'
 })
 export class QuizComponent implements OnInit, OnDestroy {
+  // UI/data
+  loading: boolean = true;
   questions: QuizQuestion[] = [];
   currentQuestionIndex: number = 0;
   selectedAnswer: string = '';
@@ -36,411 +34,529 @@ export class QuizComponent implements OnInit, OnDestroy {
   testStarted: boolean = false;
   timer: number = 0;
   timerInterval: any = null;
-  questionTimeMap: { [level: string]: number } = { 'beginner': 90, 'intermediate': 120, 'advanced': 150 };
+
+  // Per-level time in seconds
+  questionTimeMap: { [level: string]: number } = {
+    beginner: 90,
+    intermediate: 120,
+    advanced: 150
+  };
+
+  // Per-question timers and locks
   questionTimers: { [key: string]: number } = {};
   lockedQuestions: { [key: string]: boolean } = {};
+
+  shuffledOptions: { [questionId: string]: Array<{ key: string; value: string }> } = {};
+
+
+  // UI helpers
   alreadyAttempted: boolean = false;
   skills: string[] = [];
   levels: string[] = [];
-  loading = false;
 
   constructor(private http: HttpClient, private cdr: ChangeDetectorRef) { }
 
   ngOnInit(): void {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      window.location.href = '/login';
-      return;
-    }
-
-    this.http.get(`${environment.apiUrl}/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` }
-    }).subscribe({
-      next: (userData: any) => {
-        if (userData.quizType !== 'normal') {
-          alert('No quiz assigned. Please contact your administrator.');
-          window.location.href = '/';
-          return;
-        }
-        this.restoreQuizState();
-        this.loadUserQuestionCounts();
-      },
-      error: () => {
-        window.location.href = '/login';
-      }
-    });
-  }
-
-  ngOnDestroy() {
-    this.clearTimer();
-  }
-
-  private restoreQuizState() {
-    const savedTimers = localStorage.getItem('questionTimers');
-    const savedIndex = localStorage.getItem('currentQuestionIndex');
-    const savedLocked = localStorage.getItem('lockedQuestions');
-    const savedUserAnswers = localStorage.getItem('userAnswers');
-    const savedTestStarted = localStorage.getItem('testStarted');
-    const savedQuizCompleted = localStorage.getItem('quizCompleted');
-
-    if (savedTimers) {
-      try { this.questionTimers = JSON.parse(savedTimers); } catch { this.questionTimers = {}; }
-    }
-    if (savedLocked) {
-      try { this.lockedQuestions = JSON.parse(savedLocked); } catch { this.lockedQuestions = {}; }
-    }
-    if (savedUserAnswers) {
-      try { this.userAnswers = JSON.parse(savedUserAnswers); } catch { this.userAnswers = {}; }
-    }
-    if (savedTestStarted) {
-      this.testStarted = savedTestStarted === 'true';
-    }
-    if (savedIndex && !isNaN(Number(savedIndex))) {
-      this.currentQuestionIndex = Number(savedIndex);
-    }
-    if (savedQuizCompleted === 'true') {
-      this.quizCompleted = true;
-    }
-  }
-
-  loadUserQuestionCounts() {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      this.fetchAllQuestions();
-      return;
-    }
-    this.http.get(`${environment.apiUrl}/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` }
-    }).subscribe({
-      next: (userData: any) => {
-        this.quizCompleted = userData.quizCompleted === true;
-        this.fetchAllQuestions();
-      },
-      error: () => {
-        this.quizCompleted = false;
-        this.fetchAllQuestions();
-      }
-    });
-  }
-
-  fetchAllQuestions() {
-    this.loading = true;
-    const token = localStorage.getItem('token');
-    const userId = localStorage.getItem('intervieweeId');
-    // console.log('Fetching questions for userId:', userId);
-    if (!userId) {
-      // console.error('No userId found in localStorage (intervieweeId)');
-      this.loading = false;
-      this.questions = [];
-      return;
-    }
-    const apiUrl = `${environment.apiUrl}/questions?userId=${userId}`;
-    // console.log('API URL:', apiUrl);
-    this.http.get(apiUrl, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    }).subscribe({
-      next: (questions: any) => {
-        // console.log('Questions response:', questions);
-        this.questions = Array.isArray(questions) ? questions : [];
-        // Set skills and levels from questions
-        if (this.questions.length > 0) {
-          this.skills = Array.from(new Set(this.questions.map(q => q.skill))).filter(Boolean);
-          this.levels = Array.from(new Set(this.questions.map(q => q.level))).filter(Boolean);
+    // First, ask server if quiz is already completed to prevent extra attempts
+    this.checkServerQuizStatus()
+      .then(() => {
+        if (!this.quizCompleted) {
+          this.fetchAllQuestions();
         } else {
-          this.skills = [];
-          this.levels = [];
+          // If already completed, stop loading and persist state
+          this.loading = false;
+          this.saveQuizState();
         }
-        this.loading = false;
-        this.initializeQuizAfterLoad();
-      },
-      error: (error) => {
-        console.error('Error fetching questions:', error);
-        this.questions = [];
-        this.loading = false;
-      }
-    });
+      })
+      .catch(() => {
+        // On error, proceed to load questions so user can continue
+        this.fetchAllQuestions();
+      });
   }
 
-  // FIX APPLIED: Restores question index from localStorage if valid, else sets to 0
-  private initializeQuizAfterLoad() {
-    if (this.questions.length === 0) return;
-    if (this.quizCompleted) return;
-    this.initTimers();
-
-    // Restore question index if valid, else default to zero
-    const savedIndex = localStorage.getItem('currentQuestionIndex');
-    let index = 0;
-    if (savedIndex && !isNaN(Number(savedIndex))) {
-      const num = Number(savedIndex);
-      if (num >= 0 && num < this.questions.length) {
-        index = num;
-      }
-    }
-    this.currentQuestionIndex = index;
-
-    this.updateSelectedAnswerForCurrentQuestion();
-    this.autoAdvanceIfLockedOrExpired();
-    if (!this.testStarted) {
-      this.startQuiz();
-    } else {
-      this.startTimer();
-    }
-    this.saveQuizState();
-    this.cdr.detectChanges();
-  }
-
-  private updateSelectedAnswerForCurrentQuestion() {
-    if (this.currentQuestion && this.userAnswers[this.currentQuestion._id]) {
-      this.selectedAnswer = this.userAnswers[this.currentQuestion._id];
-    } else {
-      this.selectedAnswer = '';
-    }
-    // console.log('updateSelectedAnswerForCurrentQuestion:', {
-    //   currentQuestion: this.currentQuestion?._id,
-    //   selectedAnswer: this.selectedAnswer,
-    //   userAnswers: this.userAnswers
-    // });
-    this.cdr.detectChanges();
-  }
-
-  get currentQuestion(): QuizQuestion | null {
-    return this.questions[this.currentQuestionIndex] || null;
-  }
-
-  nextQuestion(): void {
-    this.clearTimer();
-    if (this.currentQuestion) {
-      this.userAnswers[this.currentQuestion._id] = this.selectedAnswer;
-    }
-    if (this.currentQuestionIndex < this.questions.length - 1) {
-      this.currentQuestionIndex++;
-      this.updateSelectedAnswerForCurrentQuestion();
-      this.startTimer();
-      this.saveQuizState();
-    } else {
-      this.submitQuiz();
-    }
-    this.cdr.detectChanges();
-  }
-
-  prevQuestion(): void {
-    this.clearTimer();
-    if (this.currentQuestion) {
-      this.userAnswers[this.currentQuestion._id] = this.selectedAnswer;
-    }
-    if (this.currentQuestionIndex > 0) {
-      this.currentQuestionIndex--;
-      this.updateSelectedAnswerForCurrentQuestion();
-      this.startTimer();
-      this.saveQuizState();
-    }
-    this.cdr.detectChanges();
-  }
-
-  onAnswerSelect(option: string): void {
-    this.selectedAnswer = option;
-    if (this.currentQuestion) {
-      this.userAnswers[this.currentQuestion._id] = option;
-      this.saveQuizState();
-    }
-    // console.log('onAnswerSelect:', {
-    //   currentQuestion: this.currentQuestion?._id,
-    //   selectedAnswer: this.selectedAnswer,
-    //   userAnswers: this.userAnswers
-    // });
-    this.cdr.detectChanges();
-  }
-
-  startQuiz() {
-    if (!this.testStarted && !this.quizCompleted) {
-      if (Object.keys(this.questionTimers).length === 0) {
-        this.resetQuizState();
-        this.initTimers();
-      }
-      this.testStarted = true;
-      this.alreadyAttempted = false;
-      this.startTimer();
-      this.saveQuizState();
-    }
-  }
-
-  private resetQuizState() {
-    this.testStarted = false;
-    this.userAnswers = {};
-    this.lockedQuestions = {};
-    this.questionTimers = {};
-    this.currentQuestionIndex = 0;
-  }
-
-  private clearQuizStorage() {
-    const keys = ['questionTimers', 'currentQuestionIndex', 'lockedQuestions', 'userAnswers', 'testStarted'];
-    keys.forEach(key => localStorage.removeItem(key));
-  }
-
-  initTimers() {
-    for (const q of this.questions) {
-      if (!this.questionTimers.hasOwnProperty(q._id)) {
-        const levelKey = q.level ? q.level.toLowerCase().trim() : 'beginner';
-        const timeForLevel = this.questionTimeMap[levelKey] || 90;
-        this.questionTimers[q._id] = timeForLevel;
-      }
-    }
-  }
-
-  startTimer() {
-    this.clearTimer();
-    const q = this.currentQuestion;
-    if (!q) return;
-    if (!this.questionTimers.hasOwnProperty(q._id)) {
-      const levelKey = q.level ? q.level.toLowerCase().trim() : 'beginner';
-      this.questionTimers[q._id] = this.questionTimeMap[levelKey] || 90;
-    }
-    this.timer = this.questionTimers[q._id];
-    this.timerInterval = setInterval(() => {
-      if (this.timer > 0) {
-        this.timer--;
-        this.questionTimers[q._id] = this.timer;
-        this.saveQuizState();
-      }
-      if (this.timer <= 0) {
-        this.handleTimerExpire();
-      }
-    }, 1000);
-  }
-
-  clearTimer() {
+  ngOnDestroy(): void {
     if (this.timerInterval) {
       clearInterval(this.timerInterval);
       this.timerInterval = null;
     }
   }
 
-  handleTimerExpire() {
-    this.clearTimer();
-    const q = this.currentQuestion;
-    if (q) {
-      this.lockedQuestions[q._id] = true;
-      this.saveQuizState();
-
-      // Find next question with time remaining
-      let nextQuestionIndex = this.findNextQuestionWithTime();
-
-      if (nextQuestionIndex !== -1) {
-        // Move to the next question that has time remaining
-        this.currentQuestionIndex = nextQuestionIndex;
-        this.updateSelectedAnswerForCurrentQuestion();
-        this.startTimer();
-        this.saveQuizState();
-      } else {
-        // All questions are either locked or have no time remaining
-        // Only then should we submit the quiz
-        this.submitQuiz();
-      }
-    }
+  // Namespace localStorage per user to prevent cross-candidate bleed
+  private storageKey(name: string): string {
+    const userId = localStorage.getItem('intervieweeId') || 'anon';
+    return `${name}_${userId}`;
   }
 
-  findNextQuestionWithTime(): number {
-    // First, check questions after current index
-    for (let i = this.currentQuestionIndex + 1; i < this.questions.length; i++) {
-      const question = this.questions[i];
-      if (question && !this.lockedQuestions[question._id] && this.questionTimers[question._id] > 0) {
-        return i;
+  private fetchAllQuestions(): void {
+    const userId = localStorage.getItem('intervieweeId') || '';
+    const url = `${environment.apiUrl}/questions${userId ? `?userId=${userId}` : ''}`;
+
+    // Try cache first
+    const cached = localStorage.getItem(this.storageKey('cachedQuestions'));
+    if (cached) {
+      try {
+        const qs: QuizQuestion[] = JSON.parse(cached) || [];
+        this.questions = Array.isArray(qs) ? qs : [];
+        this.computeSkillsAndLevels();
+        this.applyPersistedOrder(); // persist-once, reuse thereafter
+        this.restoreQuizState();
+        this.initializeQuizAfterLoad();
+        this.loading = false;
+      } catch {
+        // ignore cache parse errors
       }
     }
 
-    // If no questions found after current index, check from beginning
-    for (let i = 0; i < this.currentQuestionIndex; i++) {
-      const question = this.questions[i];
-      if (question && !this.lockedQuestions[question._id] && this.questionTimers[question._id] > 0) {
-        return i;
-      }
-    }
-
-    // No questions with time remaining found
-    return -1;
-  }
-
-  saveQuizState() {
-    const state = {
-      questionTimers: JSON.stringify(this.questionTimers),
-      currentQuestionIndex: this.currentQuestionIndex.toString(),
-      lockedQuestions: JSON.stringify(this.lockedQuestions),
-      userAnswers: JSON.stringify(this.userAnswers),
-      testStarted: this.testStarted.toString(),
-      quizCompleted: this.quizCompleted.toString()
-    };
-    Object.entries(state).forEach(([key, value]) => {
-      localStorage.setItem(key, value);
-    });
-  }
-
-  submitQuiz() {
-    this.clearTimer();
-    this.clearQuizStorage();
-    if (this.alreadyAttempted) {
-      alert('You have already attempted this quiz.');
-      return;
-    }
-    const intervieweeId = localStorage.getItem('intervieweeId');
-    if (!intervieweeId) {
-      alert('Interviewee ID not found. Please log in again.');
-      return;
-    }
-    this.isSubmitting = true;
-    const questionResponses = this.questions.map(q => ({
-      questionId: q._id,
-      question: q.question,
-      skill: q.skill,
-      level: q.level,
-      userAnswer: this.userAnswers[q._id] || '',
-      correctanswer: q.correctanswer,
-      isCorrect: (this.userAnswers[q._id] || '').toLowerCase() === q.correctanswer.toLowerCase(),
-      options: q.options
-    }));
-    this.http.post(`${environment.apiUrl}/quiz/submit`, {
-      userId: intervieweeId,
-      questionResponses
-    }).subscribe({
-      next: () => {
-        this.quizCompleted = true;
-        this.testStarted = false;
-        localStorage.setItem('quizCompleted', 'true');
-        this.isSubmitting = false;
+    // Always fetch fresh (server preserves admin skill order)
+    this.http.get<any>(url).subscribe({
+      next: (data) => {
+        const questions: QuizQuestion[] = Array.isArray(data) ? data : data?.questions || [];
+        this.questions = Array.isArray(questions) ? questions : [];
+        localStorage.setItem(this.storageKey('cachedQuestions'), JSON.stringify(this.questions));
+        this.computeSkillsAndLevels();
+        this.applyPersistedOrder(); // persist-once, reuse thereafter
+        this.restoreQuizState();
+        this.initializeQuizAfterLoad();
+        this.loading = false;
       },
-      error: (err) => {
-        alert('Error submitting quiz. Please try again.');
-        this.isSubmitting = false;
+      error: () => {
+        // fallback to whatever is already loaded
+        this.computeSkillsAndLevels();
+        this.applyPersistedOrder(); // persist-once, reuse thereafter
+        this.restoreQuizState();
+        this.initializeQuizAfterLoad();
+        this.loading = false;
       }
     });
-    return false;
   }
 
-  autoAdvanceIfLockedOrExpired() {
-    while (this.currentQuestionIndex < this.questions.length - 1) {
-      const currentQ = this.questions[this.currentQuestionIndex];
-      if (currentQ && (this.lockedQuestions[currentQ._id] || this.questionTimers[currentQ._id] <= 0)) {
-        this.currentQuestionIndex++;
-      } else {
-        break;
-      }
+  private computeSkillsAndLevels() {
+    const s = new Set<string>();
+    const l = new Set<string>();
+    for (const q of this.questions) {
+      if (q.skill) s.add(q.skill);
+      if (q.level) l.add(q.level);
     }
+    this.skills = Array.from(s);
+    this.levels = Array.from(l);
+  }
+
+  // Persist the order once, then always reuse it (no re-shuffle)
+  private applyPersistedOrder() {
+    const userId = localStorage.getItem('intervieweeId');
+    if (!userId || this.questions.length === 0) return;
+
+    const orderKey = this.storageKey('userQuestionOrder');
+    const savedOrder = localStorage.getItem(orderKey);
+
+    if (savedOrder) {
+      const ids: string[] = JSON.parse(savedOrder);
+      const pos = new Map(ids.map((id, i) => [id, i]));
+      this.questions.sort(
+        (a, b) =>
+          (pos.get(a._id) ?? Number.MAX_SAFE_INTEGER) -
+          (pos.get(b._id) ?? Number.MAX_SAFE_INTEGER)
+      );
+      return;
+    }
+
+    // No saved order yet: trust current server order (already grouped), and persist once
+    localStorage.setItem(orderKey, JSON.stringify(this.questions.map((q) => q._id)));
+  }
+
+  private initializeQuizAfterLoad() {
+    if (this.questions.length === 0 || this.quizCompleted) return;
+
+    this.initTimers();
+
+    // Resume index if present, else start at Q1 (index 0)
+    const savedIndex = localStorage.getItem(this.storageKey('currentQuestionIndex'));
+    let index = 0;
+    if (savedIndex && !isNaN(Number(savedIndex))) {
+      const num = Number(savedIndex);
+      if (num >= 0 && num < this.questions.length) index = num;
+    }
+    this.currentQuestionIndex = index;
     this.updateSelectedAnswerForCurrentQuestion();
+
+    // If any progress exists, resume even if testStarted was cleared on logout
+    const hasProgress =
+      Object.keys(this.userAnswers || {}).length > 0 ||
+      Object.keys(this.questionTimers || {}).length > 0 ||
+      Object.keys(this.lockedQuestions || {}).length > 0;
+
+    const wasStarted = localStorage.getItem(this.storageKey('testStarted')) === 'true';
+    const resume = wasStarted || hasProgress;
+
+    if (resume) {
+      this.testStarted = true;
+      this.startTimer();
+      this.autoAdvanceIfLockedOrExpired();
+    } else {
+      this.currentQuestionIndex = 0;
+      this.updateSelectedAnswerForCurrentQuestion();
+      this.startQuiz();
+    }
+
+    this.saveQuizState();
+    this.cdr.detectChanges();
   }
 
-  getOptions(q: any): { key: string; value: string }[] {
-    return q?.options ? Object.entries(q.options).map(([key, value]) => ({
-      key: key.toUpperCase(),
-      value: String(value)
-    })) : [];
+  // Check with backend whether the user has already completed the quiz
+  private async checkServerQuizStatus(): Promise<void> {
+    try {
+      const token = localStorage.getItem('token') || '';
+      if (!token) {
+        this.quizCompleted = false;
+        localStorage.removeItem(this.storageKey('quizCompleted'));
+        localStorage.removeItem('quizCompleted');
+        return;
+      }
+
+      const res: any = await firstValueFrom(
+        this.http.get(`${environment.apiUrl}/quiz/check-status`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+      );
+
+      if (res && typeof res.quizCompleted === 'boolean') {
+        this.quizCompleted = res.quizCompleted;
+
+        if (res.quizCompleted) {
+          localStorage.setItem(this.storageKey('quizCompleted'), 'true');
+          localStorage.setItem('quizCompleted', 'true');
+          this.testStarted = false;
+          if (this.timerInterval) {
+            clearInterval(this.timerInterval);
+            this.timerInterval = null;
+          }
+        } else {
+          localStorage.removeItem(this.storageKey('quizCompleted'));
+          localStorage.removeItem('quizCompleted');
+        }
+      } else {
+        this.quizCompleted = false;
+        localStorage.removeItem(this.storageKey('quizCompleted'));
+        localStorage.removeItem('quizCompleted');
+      }
+    } catch (e) {
+      console.error('Failed to check server quiz status:', e);
+      this.quizCompleted = false;
+      localStorage.removeItem(this.storageKey('quizCompleted'));
+      localStorage.removeItem('quizCompleted');
+    }
   }
 
-  trackByOptionKey(index: number, option: any): string {
-    return option.key || index;
+  startQuiz(): void {
+    this.testStarted = true;
+    this.quizCompleted = false;
+    this.startTimer();
+    this.saveQuizState();
+  }
+
+  private startTimer(): void {
+    if (this.timerInterval) clearInterval(this.timerInterval);
+
+    const q = this.questions[this.currentQuestionIndex];
+    if (!q) return;
+
+    const key = this.timerKey(q);
+    const lvl = (q.level || '').toLowerCase();
+    const defaultTime = this.questionTimeMap[lvl] ?? this.questionTimeMap['intermediate'];
+
+    if (this.questionTimers[key] == null) {
+      this.questionTimers[key] = defaultTime;
+    }
+    this.timer = this.questionTimers[key];
+
+    this.timerInterval = setInterval(() => {
+      if (this.timer > 0) {
+        this.timer--;
+        this.questionTimers[key] = this.timer;
+      } else {
+        this.lockedQuestions[key] = true;
+        this.autoAdvanceIfLockedOrExpired();
+      }
+      this.saveQuizState();
+    }, 1000);
+  }
+
+  private timerKey(q: QuizQuestion): string {
+    return `${q._id}`;
+  }
+
+  private initTimers(): void {
+    const timers = localStorage.getItem(this.storageKey('questionTimers'));
+    const locks = localStorage.getItem(this.storageKey('lockedQuestions'));
+    this.questionTimers = timers ? JSON.parse(timers) : {};
+    this.lockedQuestions = locks ? JSON.parse(locks) : {};
+  }
+
+  private autoAdvanceIfLockedOrExpired(): void {
+    const q = this.questions[this.currentQuestionIndex];
+    if (!q) return;
+    const key = this.timerKey(q);
+    const isLocked = !!this.lockedQuestions[key];
+    const hasPersistedTimer = this.questionTimers[key] != null;
+    const isExpired = hasPersistedTimer && this.questionTimers[key] <= 0;
+
+    if (isLocked || isExpired) {
+      // Move to the next available unlocked question, else finish
+      for (let i = 1; i <= this.questions.length; i++) {
+        const next = (this.currentQuestionIndex + i) % this.questions.length;
+        const nq = this.questions[next];
+        const nk = this.timerKey(nq);
+        if (!this.lockedQuestions[nk]) {
+          this.currentQuestionIndex = next;
+          this.updateSelectedAnswerForCurrentQuestion();
+          this.startTimer();
+          this.saveQuizState();
+          return;
+        }
+      }
+      this.completeQuiz();
+    }
+  }
+
+  // Template helpers
+  get currentQuestion(): QuizQuestion | undefined {
+    return this.questions[this.currentQuestionIndex];
   }
 
   get formattedTimer(): string {
-    const mins = Math.floor(this.timer / 60);
-    const secs = this.timer % 60;
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    const m = Math.floor((this.timer || 0) / 60);
+    const s = (this.timer || 0) % 60;
+    const mm = m.toString().padStart(2, '0');
+    const ss = s.toString().padStart(2, '0');
+    return `${mm}:${ss}`;
   }
+
+  getOptions(q?: QuizQuestion): Array<{ key: string; value: string }> {
+    const qq = q || this.currentQuestion;
+    if (!qq) return [];
+
+    // Check if we already have shuffled options for this question
+    if (this.shuffledOptions[qq._id]) {
+      return this.shuffledOptions[qq._id];
+    }
+
+    // Create original options
+    const { a, b, c, d } = qq.options || ({} as any);
+    const originalOptions: Array<{ key: string; value: string }> = [];
+    if (a != null) originalOptions.push({ key: 'a', value: a });
+    if (b != null) originalOptions.push({ key: 'b', value: b });
+    if (c != null) originalOptions.push({ key: 'c', value: c });
+    if (d != null) originalOptions.push({ key: 'd', value: d });
+
+    // Shuffle the options using Fisher-Yates algorithm
+    const shuffled = [...originalOptions];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+
+    // Store shuffled options for this question
+    this.shuffledOptions[qq._id] = shuffled;
+    this.saveShuffledOptions();
+
+    return shuffled;
+  }
+  private saveShuffledOptions(): void {
+    localStorage.setItem(
+      this.storageKey('shuffledOptions'),
+      JSON.stringify(this.shuffledOptions)
+    );
+  }
+
+  private restoreShuffledOptions(): void {
+    try {
+      const shuffled = localStorage.getItem(this.storageKey('shuffledOptions'));
+      if (shuffled) {
+        this.shuffledOptions = JSON.parse(shuffled);
+      }
+    } catch {
+      // ignore parse errors
+      this.shuffledOptions = {};
+    }
+  }
+  trackByOptionKey = (_: number, item: { key: string; value: string }) => item.key;
+
+  onAnswerSelect(optionKey: string): void {
+    this.onSelectAnswer(optionKey);
+  }
+
+  onSelectAnswer(option: string): void {
+    const q = this.questions[this.currentQuestionIndex];
+    if (!q) return;
+    this.selectedAnswer = option;
+    this.userAnswers[q._id] = option;
+    this.saveQuizState();
+  }
+
+  prevQuestion(): void {
+    this.goPrev();
+  }
+
+  nextQuestion(): void {
+    this.goNext();
+  }
+
+  goNext(): void {
+    if (this.currentQuestionIndex < this.questions.length - 1) {
+      this.currentQuestionIndex++;
+      this.updateSelectedAnswerForCurrentQuestion();
+      this.startTimer();
+      this.saveQuizState();
+    }
+  }
+
+  goPrev(): void {
+    if (this.currentQuestionIndex > 0) {
+      this.currentQuestionIndex--;
+      this.updateSelectedAnswerForCurrentQuestion();
+      this.startTimer();
+      this.saveQuizState();
+    }
+  }
+
+  submitAnswer(): void {
+    const q = this.questions[this.currentQuestionIndex];
+    if (!q) return;
+    const key = this.timerKey(q);
+    this.lockedQuestions[key] = true;
+    this.saveQuizState();
+    this.autoAdvanceIfLockedOrExpired();
+  }
+
+  submitQuiz(): void {
+    if (this.isSubmitting || this.quizCompleted) return;
+    this.isSubmitting = true;
+
+    const userId = localStorage.getItem('intervieweeId') || '';
+    if (!userId) {
+      alert('User not identified. Please log in again.');
+      this.isSubmitting = false;
+      return;
+    }
+
+    // Build detailed responses expected by backend Result model
+    const questionResponses = this.questions.map((q) => {
+      const userAnswer = this.userAnswers[q._id] || '';
+      const correct = (q.correctanswer || '').toString();
+      return {
+        questionId: q._id,
+        question: q.question,
+        skill: q.skill,
+        level: q.level,
+        userAnswer: userAnswer,
+        correctanswer: correct,
+        isCorrect: userAnswer !== '' && userAnswer === correct,
+        options: {
+          a: q.options?.a ?? '',
+          b: q.options?.b ?? '',
+          c: q.options?.c ?? '',
+          d: q.options?.d ?? '',
+        },
+      } as any;
+    });
+
+    const payload = { userId, questionResponses } as any;
+
+    this.http.post(`${environment.apiUrl}/quiz/submit`, payload).subscribe({
+      next: (_res: any) => {
+        // Mark completed locally; backend updates user.quizCompleted
+        this.completeQuiz();
+        this.isSubmitting = false;
+
+      },
+      error: (err) => {
+        console.error('Error submitting quiz:', err);
+        this.isSubmitting = false;
+        alert('Failed to submit quiz. Please try again.');
+      },
+    });
+  }
+
+  private completeQuiz(): void {
+    this.quizCompleted = true;
+    if (this.timerInterval) {
+      clearInterval(this.timerInterval);
+      this.timerInterval = null;
+    }
+    this.saveQuizState();
+  }
+
+  private updateSelectedAnswerForCurrentQuestion(): void {
+    const q = this.questions[this.currentQuestionIndex];
+    this.selectedAnswer = q ? this.userAnswers[q._id] || '' : '';
+  }
+
+  private resetQuizState(): void {
+    this.testStarted = false;
+    this.quizCompleted = false;
+    this.timer = 0;
+    if (this.timerInterval) {
+      clearInterval(this.timerInterval);
+      this.timerInterval = null;
+    }
+    this.questionTimers = {};
+    this.lockedQuestions = {};
+    this.userAnswers = {};
+    this.shuffledOptions = {};
+    localStorage.removeItem(this.storageKey('questionTimers'));
+    localStorage.removeItem(this.storageKey('lockedQuestions'));
+    localStorage.removeItem(this.storageKey('userAnswers'));
+    localStorage.removeItem(this.storageKey('shuffledOptions'));
+    localStorage.removeItem(this.storageKey('quizCompleted'));
+    // Do NOT remove 'userQuestionOrder' so order persists across logout/login
+  }
+
+  private saveQuizState(): void {
+    localStorage.setItem(
+      this.storageKey('questionTimers'),
+      JSON.stringify(this.questionTimers)
+    );
+    localStorage.setItem(
+      this.storageKey('lockedQuestions'),
+      JSON.stringify(this.lockedQuestions)
+    );
+    localStorage.setItem(
+      this.storageKey('userAnswers'),
+      JSON.stringify(this.userAnswers)
+    );
+    localStorage.setItem(
+      this.storageKey('currentQuestionIndex'),
+      this.currentQuestionIndex.toString()
+    );
+    localStorage.setItem(this.storageKey('testStarted'), this.testStarted.toString());
+    localStorage.setItem(this.storageKey('quizCompleted'), this.quizCompleted.toString());
+
+    // Save shuffled options
+    this.saveShuffledOptions();
+
+    // ALSO save without user suffix for cross-login persistence
+    if (this.quizCompleted) {
+      localStorage.setItem('quizCompleted', 'true');
+    }
+  }
+  private restoreQuizState(): void {
+  try {
+    const answers = localStorage.getItem(this.storageKey('userAnswers'));
+    if (answers) this.userAnswers = JSON.parse(answers);
+
+    const idx = localStorage.getItem(this.storageKey('currentQuestionIndex'));
+    if (idx && !isNaN(Number(idx))) this.currentQuestionIndex = Number(idx);
+
+    const ts = localStorage.getItem(this.storageKey('testStarted'));
+    if (ts) this.testStarted = ts === 'true';
+
+    // Don't restore completion status from localStorage
+    // Let checkServerQuizStatus() be the authoritative source
+    
+    // Restore shuffled options
+    this.restoreShuffledOptions();
+  } catch {
+    // ignore parse errors
+  }
+}
 }

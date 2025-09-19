@@ -7,14 +7,22 @@ import isAdmin from '../middleware/isadmin';
 
 const router = express.Router();
 
+// Fisher–Yates shuffle (unbiased O(n))
+function shuffleInPlace<T>(arr: T[]) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+
 /* GET /questions */
 router.get('/', async (req: Request, res: Response) => {
   try {
     const { skill, level, limit, userId, page, search } = req.query;
     const pageNum = parseInt(page as string) || 0;
     const limitNum = parseInt(limit as string) || 10;
-    const searchTerm = search as string || '';
-    
+    const searchTerm = (search as string) || '';
+
     if (userId) {
       try {
         const user = await User.findById(userId);
@@ -24,6 +32,7 @@ router.get('/', async (req: Request, res: Response) => {
 
         const allQuestions: any[] = [];
         const assignedQuestionsMap = new Map<string, string[]>();
+
         for (const userSkill in user.questionCounts) {
           for (const userLevel in user.questionCounts[userSkill]) {
             const count = user.questionCounts[userSkill][userLevel];
@@ -31,11 +40,10 @@ router.get('/', async (req: Request, res: Response) => {
               // Ensure consistent key format
               const safeSkill = userSkill.replace(/\./g, '__');
               const key = `${safeSkill}_${userLevel}`;
+
               // Check if questions already assigned
-              // Handle both Map objects and plain objects (from MongoDB)
               let hasAssignedQuestions = false;
               let existingIds: string[] = [];
-              
               if (user.assignedQuestions) {
                 if (user.assignedQuestions instanceof Map) {
                   hasAssignedQuestions = user.assignedQuestions.has(key);
@@ -44,45 +52,62 @@ router.get('/', async (req: Request, res: Response) => {
                   }
                 } else if (typeof user.assignedQuestions === 'object') {
                   // Handle case where MongoDB returns a plain object instead of a Map
-                  hasAssignedQuestions = Object.prototype.hasOwnProperty.call(user.assignedQuestions, key);
+                  hasAssignedQuestions = Object.prototype.hasOwnProperty.call(
+                    user.assignedQuestions,
+                    key
+                  );
                   if (hasAssignedQuestions) {
                     existingIds = (user.assignedQuestions as any)[key] || [];
                   }
                 }
               }
-              
+
               if (hasAssignedQuestions && existingIds.length > 0) {
-                // ...existing code...
+                // Use existing assigned questions, preserving saved order
                 try {
                   const questions = await Questions.find({
-                    _id: { $in: existingIds.map(id => new mongoose.Types.ObjectId(id)) }
+                    _id: {
+                      $in: existingIds.map((id) => new mongoose.Types.ObjectId(id)),
+                    },
                   });
+
+                  // sort docs to match existingIds order
+                  const order = new Map(
+                    existingIds.map((id: string, idx: number) => [id, idx])
+                  );
+                  questions.sort(
+                    (a: any, b: any) =>
+                      (order.get(a._id.toString()) ?? 0) -
+                      (order.get(b._id.toString()) ?? 0)
+                  );
+
                   allQuestions.push(...questions);
                 } catch (err) {
                   // Handle error silently
                 }
               } else {
-                // Assign new questions
+                // Assign new questions (randomize once, persist that order)
                 try {
-                  // Use the count from questionCounts to determine how many questions to fetch
-                  // Make sure we're getting the exact count specified
                   const availableQuestions = await Questions.find({
                     skill: new RegExp(`^${userSkill}$`, 'i'),
-                    level: new RegExp(`^${userLevel}$`, 'i')
+                    level: new RegExp(`^${userLevel}$`, 'i'),
                   });
-                  
-                  // Randomly select 'count' questions if we have more than needed
-                  let selectedQuestions = availableQuestions;
-                  if (availableQuestions.length > count) {
-                    // Shuffle the array and take the first 'count' elements
-                    selectedQuestions = availableQuestions
-                      .sort(() => 0.5 - Math.random())
-                      .slice(0, count);
+
+                  let selectedQuestions = availableQuestions.slice();
+                  // shuffle then slice to 'count'
+                  shuffleInPlace(selectedQuestions);
+                  if (selectedQuestions.length > count) {
+                    selectedQuestions = selectedQuestions.slice(0, count);
                   }
 
                   if (selectedQuestions.length > 0) {
                     allQuestions.push(...selectedQuestions);
-                    assignedQuestionsMap.set(key, selectedQuestions.map(q => (q._id as mongoose.Types.ObjectId).toString()));
+                    assignedQuestionsMap.set(
+                      key,
+                      selectedQuestions.map((q) =>
+                        (q._id as mongoose.Types.ObjectId).toString()
+                      )
+                    );
                   }
                 } catch (err) {
                   // Handle error silently
@@ -105,12 +130,12 @@ router.get('/', async (req: Request, res: Response) => {
             }
             user.assignedQuestions = tempMap;
           }
-          
+
           // Merge the new assignments with existing ones
           for (const [key, value] of assignedQuestionsMap.entries()) {
             user.assignedQuestions.set(key, value);
           }
-          
+
           // Save the user with the updated map
           try {
             await user.save();
@@ -119,42 +144,105 @@ router.get('/', async (req: Request, res: Response) => {
           }
         }
 
-        return res.status(200).json(allQuestions);
-              } catch (err) {
-          return res.status(500).json({ message: 'Internal server error (userId logic)' });
+        // Group by skill (case-insensitive keys)
+        const buckets: Record<string, any[]> = {};
+        for (const q of allQuestions) {
+          const k = (q.skill || '').toLowerCase().trim();
+          if (!buckets[k]) buckets[k] = [];
+          buckets[k].push(q);
         }
+
+        // Define desired skill order
+        const skillsInOrder: string[] = [];
+        const skillVariants: Record<string, string[]> = {
+          nodejs: ['nodejs', 'node js', 'node.js'],
+          react: ['react', 'reactjs', 'react.js'],
+          mongodb: ['mongodb', 'mongo db', 'mongo'],
+          git: ['git'],
+          django: ['django'],
+          docker: ['docker'],
+          typescript: ['typescript', 'ts'],
+        };
+
+        // Get skills in the order they appear in user.questionCounts
+        for (const userSkill in user.questionCounts) {
+          const normalizedSkill = userSkill.toLowerCase().trim();
+          // Find which main skill this belongs to
+          let mainSkill = normalizedSkill;
+          for (const [k, variants] of Object.entries(skillVariants)) {
+            if (variants.some((v) => v === normalizedSkill)) {
+              mainSkill = k;
+              break;
+            }
+          }
+          if (!skillsInOrder.includes(mainSkill)) {
+            skillsInOrder.push(mainSkill);
+          }
+        }
+
+        // Create desired order array with all variants
+        const desiredOrder: string[] = [];
+        for (const s of skillsInOrder) {
+          if (skillVariants[s]) {
+            desiredOrder.push(...skillVariants[s]);
+          } else {
+            desiredOrder.push(s);
+          }
+        }
+
+        // Build final list: preferred skills in order, then any remaining skills
+        const finalQuestions: any[] = [];
+        const used = new Set<string>();
+
+        for (const k of desiredOrder) {
+          const normalized = k.toLowerCase().trim();
+          if (buckets[normalized] && buckets[normalized].length) {
+            // DO NOT sort here; preserve assigned order
+            finalQuestions.push(...buckets[normalized]);
+            used.add(normalized);
+          }
+        }
+
+        // Append any other skills (if present), preserving assigned order
+        for (const [k, list] of Object.entries(buckets)) {
+          if (!used.has(k) && list.length) {
+            // DO NOT sort here; preserve assigned order
+            finalQuestions.push(...list);
+          }
+        }
+
+        return res.status(200).json(finalQuestions);
+      } catch (err) {
+        return res.status(500).json({ message: 'Internal server error (userId logic)' });
+      }
     }
 
     // Original non-userId logic with pagination and search
     const filter: any = {};
     if (skill) filter.skill = new RegExp(`^${skill}$`, 'i');
     if (level) filter.level = new RegExp(`^${level}$`, 'i');
-    
+
     // Add search functionality
     if (searchTerm) {
       filter.$or = [
         { question: { $regex: searchTerm, $options: 'i' } },
         { skill: { $regex: searchTerm, $options: 'i' } },
-        { level: { $regex: searchTerm, $options: 'i' } }
+        { level: { $regex: searchTerm, $options: 'i' } },
       ];
     }
-    
+
     // Get total count for pagination
     const total = await Questions.countDocuments(filter);
-    
+
     // Apply pagination
-    let query = Questions.find(filter)
-      .skip(pageNum * limitNum)
-      .limit(limitNum)
-      .sort({ createdAt: -1 });
-    
+    let query = Questions.find(filter).skip(pageNum * limitNum).limit(limitNum).sort({ createdAt: -1 });
     const questions = await query;
-    
+
     res.status(200).json({
       questions,
       totalPages: Math.ceil(total / limitNum),
       currentPage: pageNum,
-      totalQuestions: total
+      totalQuestions: total,
     });
   } catch (err: any) {
     console.error('Error fetching questions:', err.message || err);
@@ -185,8 +273,10 @@ router.get('/skill/:skill', async (req: Request, res: Response) => {
   try {
     const { skill } = req.params;
     const { level, limit } = req.query;
+
     const filter: any = { skill: new RegExp(`^${skill}$`, 'i') };
     if (level) filter.level = new RegExp(`^${level}$`, 'i');
+
     let query = Questions.find(filter);
     if (limit) {
       const lim = parseInt(limit as string, 10);
@@ -204,8 +294,10 @@ router.get('/level/:level', async (req: Request, res: Response) => {
   try {
     const { level } = req.params;
     const { skill, limit } = req.query;
+
     const filter: any = { level: new RegExp(`^${level}$`, 'i') };
     if (skill) filter.skill = new RegExp(`^${skill}$`, 'i');
+
     let query = Questions.find(filter);
     if (limit) {
       const lim = parseInt(limit as string, 10);
@@ -218,6 +310,6 @@ router.get('/level/:level', async (req: Request, res: Response) => {
   }
 });
 
-
 router.use('/', questionCRUDRouter);
+
 export default router;

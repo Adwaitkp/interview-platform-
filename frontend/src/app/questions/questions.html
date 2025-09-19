@@ -104,7 +104,7 @@
     <span *ngIf="currentPage > 2" class="px-2">...</span>
 
     <!-- Pages around current page -->
-    <button *ngFor="let pageIndex of getVisiblePages()" (click)="currentPage = pageIndex"
+    <button *ngFor="let pageIndex of getVisiblePages()" (click)="changePage(pageIndex)"
       [class]="currentPage === pageIndex ? 'bg-blue-600 px-3 py-1 rounded text-white' : 'px-3 py-1 border border-gray-200 dark:border-gray-700 rounded hover:bg-gray-100 dark:hover:bg-gray-800 dark:text-white'">
       {{pageIndex + 1}}
     </button>
