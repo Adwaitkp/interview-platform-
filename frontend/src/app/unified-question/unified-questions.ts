@@ -69,9 +69,11 @@ export class UnifiedQuestionsComponent implements OnInit {
   aiCurrentPage = 0;
   aiPageSize = 10;
   aiTotalPages = 0;
+  aiTotalQuestions: number = 0;
   acceptedCurrentPage = 0;
   acceptedPageSize = 10;
   acceptedTotalPages = 0;
+  acceptedTotalQuestions: number = 0;
 
   // Filter options
   skills: string[] = ['Node.js', 'React', 'Angular', 'MongoDB', 'PostgreSQL', 'Next.js', 'Django', 'Git', 'Docker', 'TypeScript'];
@@ -136,13 +138,10 @@ export class UnifiedQuestionsComponent implements OnInit {
 
       const response: any = await firstValueFrom(this.http.get(url, { headers }));
 
-
-
-      // Handle both old and new response formats
       if (response.questions) {
-        // New format with pagination
         this.aiQuestions = response.questions;
         this.aiTotalPages = response.totalPages || 0;
+        this.aiTotalQuestions = response.totalQuestions || response.questions.length;  // <-- Add this line
       } else {
         // Old format (array) - for set mapping
         this.aiQuestions = response || [];
@@ -210,6 +209,7 @@ export class UnifiedQuestionsComponent implements OnInit {
       this.acceptedQuestions = (response?.questions || []).map((q: any) => ({ ...q, source: 'AI' }));
       this.acceptedTotalPages = response?.totalPages || 0;
       this.acceptedCurrentPage = response?.currentPage || 0;
+      this.acceptedTotalQuestions = response?.totalQuestions || this.acceptedQuestions.length;  // <-- Add this line
     } catch (error) {
       console.error('Error loading accepted questions:', error);
     }
@@ -325,7 +325,29 @@ export class UnifiedQuestionsComponent implements OnInit {
       const token = localStorage.getItem('token');
       const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
 
-      const approvalPromises = this.aiQuestions.map(async (question) => {
+      // First get ALL pending questions, not just current page
+      const params: any = {
+        page: 0,
+        limit: 10000,  // Get all questions
+        excludeApproved: 'true'
+      };
+
+      if (this.searchTerm.trim()) params.search = this.searchTerm;
+      if (this.selectedSkill) params.skill = this.selectedSkill;
+      if (this.selectedLevel) params.level = this.selectedLevel;
+      if (this.candidateNameSearch.trim()) params.candidateName = this.candidateNameSearch;
+      if (this.selectedSetNumber) params.setNumber = this.selectedSetNumber;
+
+      const queryString = Object.keys(params)
+        .map(key => `${key}=${encodeURIComponent(params[key])}`)
+        .join('&');
+
+      const url = `${environment.apiUrl}/ai-quiz/all-ai-questions${queryString ? '?' + queryString : ''}`;
+      const response: any = await firstValueFrom(this.http.get(url, { headers }));
+
+      const allPendingQuestions = Array.isArray(response) ? response : (response?.questions || []);
+
+      const approvalPromises = allPendingQuestions.map(async (question: any) => {
         try {
           await firstValueFrom(
             this.http.post(`${environment.apiUrl}/ai-quiz/approve-ai-question`, {
@@ -395,15 +417,15 @@ export class UnifiedQuestionsComponent implements OnInit {
       if (!token) return;
 
       const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
-      
+
       // Get all users to build set label mappings
       const response: any = await firstValueFrom(
         this.http.get(`${environment.apiUrl}/admin/users?page=0&limit=10000`, { headers })
       );
-      
+
       const users = response.users || [];
       this.setLabelMappings.clear();
-      
+
       users.forEach((user: any) => {
         if (user.userSpecificSets && Array.isArray(user.userSpecificSets)) {
           user.userSpecificSets.forEach((userSet: any) => {

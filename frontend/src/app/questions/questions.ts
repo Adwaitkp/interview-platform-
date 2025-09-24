@@ -35,7 +35,7 @@ export class QuestionsComponent implements OnInit {
   pageSize: number = 10;
   totalPages: number = 0;
 
- skills: string[] = ['Node.js', 'React', 'Angular', 'MongoDB', 'PostgreSQL', 'Next.js', 'Django', 'Git', 'Docker', 'TypeScript'];
+  skills: string[] = ['Node.js', 'React', 'Angular', 'MongoDB', 'PostgreSQL', 'Next.js', 'Django', 'Git', 'Docker', 'TypeScript'];
 
   levels = ['beginner', 'intermediate', 'advanced'];
   predefinedSkills: string[] = ['Node.js', 'React', 'Angular', 'MongoDB', 'PostgreSQL', 'Next.js', 'Django', 'Git', 'Docker', 'TypeScript'];
@@ -58,7 +58,7 @@ export class QuestionsComponent implements OnInit {
 
   private apiUrl = `${environment.apiUrl}/questions`;
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient) { }
 
   ngOnInit(): void {
     this.loadQuestions();
@@ -71,10 +71,10 @@ export class QuestionsComponent implements OnInit {
       limit: this.pageSize,
       search: this.searchTerm
     };
-    
+
     if (this.selectedSkill) params.skill = this.selectedSkill;
     if (this.selectedLevel) params.level = this.selectedLevel;
-    
+
     this.http.get<any>(this.apiUrl, { params }).subscribe({
       next: (response) => {
         this.allQuestions = response.questions;
@@ -132,9 +132,7 @@ export class QuestionsComponent implements OnInit {
 
     // Show pages around current page (excluding first and last which are handled separately)
     for (let i = Math.max(1, current - 1); i <= Math.min(totalPages - 2, current + 1); i++) {
-      if (i !== 0 && i !== totalPages - 1) {
-        pages.push(i);
-      }
+      pages.push(i);  // <-- Remove the if condition, just push all calculated pages
     }
 
     return pages;
@@ -194,10 +192,10 @@ export class QuestionsComponent implements OnInit {
   // Method to confirm and execute deletion
   confirmDelete(): void {
     if (!this.deleteQuestionId) return;
-    
+
     const token = localStorage.getItem('token');
     const headers = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
-    
+
     this.http.delete(`${this.apiUrl}/delete-question/${this.deleteQuestionId}`, headers).subscribe({
       next: () => {
         this.loadQuestions();

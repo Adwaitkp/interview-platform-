@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
 import Result from '../models/Result';
 import User from '../models/User';
-import { publishQuizSubmitted } from '../natsClient';
+// import { publishQuizSubmitted } from '../natsClient';
 
 // Submit quiz result
 export const submitQuiz = async (req: Request, res: Response) => {
@@ -65,22 +65,22 @@ export const submitQuiz = async (req: Request, res: Response) => {
     });
 
     // Publish to NATS after successful save
-    try {
-      await publishQuizSubmitted({
-        userId: userId,
-        userName: user.name,
-        userEmail: user.email,
-        totalQuestions: totalQuestions,
-        totalCorrect: totalCorrect,
-        overallPercentage: overallPercentage,
-        attemptNumber: currentAttemptNumber,
-        resultId: result._id
-      });
-      console.log(' Published quiz submission to NATS');
-    } catch (natsError) {
-      console.error(' Failed to publish to NATS:', natsError);
-      // Don't fail the API response if NATS fails
-    }
+    // try {
+    //   await publishQuizSubmitted({
+    //     userId: userId,
+    //     userName: user.name,
+    //     userEmail: user.email,
+    //     totalQuestions: totalQuestions,
+    //     totalCorrect: totalCorrect,
+    //     overallPercentage: overallPercentage,
+    //     attemptNumber: currentAttemptNumber,
+    //     resultId: result._id
+    //   });
+    //   console.log(' Published quiz submission to NATS');
+    // } catch (natsError) {
+    //   console.error(' Failed to publish to NATS:', natsError);
+    //   // Don't fail the API response if NATS fails
+    // }
 
     res.json({ 
       message: 'Result saved successfully', 

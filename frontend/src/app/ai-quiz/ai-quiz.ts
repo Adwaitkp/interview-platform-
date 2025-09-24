@@ -16,13 +16,13 @@ export class AIQuizComponent implements OnInit, OnDestroy {
   quizCompleted: boolean = false;
   isSubmitting: boolean = false;
   userAnswers: { [questionId: string]: string } = {};
-
   testStarted: boolean = false;
   timer: number = 0;
   timerInterval: any = null;
   questionTimeMap: { [level: string]: number } = { 'beginner': 90, 'intermediate': 120, 'advanced': 150 };
   questionTimers: { [key: string]: number } = {};
   lockedQuestions: { [key: string]: boolean } = {};
+  shuffledOptions: { [questionId: string]: Array<{ key: string; value: string; originalKey: string }> } = {};
   loading = false;
 
   constructor(private aiQuizService: AIQuizService, private cdr: ChangeDetectorRef) { }
@@ -33,6 +33,7 @@ export class AIQuizComponent implements OnInit, OnDestroy {
         window.location.href = '/login';
         return;
       }
+
       if (userData.quizType !== 'ai') {
         alert('No AI quiz assigned. Please contact your administrator.');
         window.location.href = '/';
@@ -43,7 +44,6 @@ export class AIQuizComponent implements OnInit, OnDestroy {
       this.applyState(restoredState);
       // Database state takes priority over localStorage for quiz completion
       this.quizCompleted = userData.aiQuizCompleted === true;
-
       this.loadQuestions();
     });
   }
@@ -58,7 +58,7 @@ export class AIQuizComponent implements OnInit, OnDestroy {
     this.lockedQuestions = state.lockedQuestions;
     this.userAnswers = state.userAnswers;
     this.testStarted = state.testStarted;
-
+    this.restoreShuffledOptions();
   }
 
   loadQuestions() {
@@ -70,7 +70,7 @@ export class AIQuizComponent implements OnInit, OnDestroy {
     }
 
     this.aiQuizService.fetchApprovedQuestions(userId).subscribe(questions => {
-      this.questions = questions;
+      this.questions = this.shuffleArray(questions);
       this.loading = false;
       this.initializeQuizAfterLoad();
     });
@@ -78,16 +78,13 @@ export class AIQuizComponent implements OnInit, OnDestroy {
 
   private initializeQuizAfterLoad() {
     if (this.questions.length === 0 || this.quizCompleted) return;
-
     this.initTimers();
-
     if (this.currentQuestionIndex >= this.questions.length) {
       this.currentQuestionIndex = 0;
     }
 
     this.updateSelectedAnswerForCurrentQuestion();
     this.autoAdvanceIfLockedOrExpired();
-
     if (this.testStarted) {
       this.startTimer();
     } else {
@@ -150,6 +147,7 @@ export class AIQuizComponent implements OnInit, OnDestroy {
         this.resetQuizState();
         this.initTimers();
       }
+
       this.testStarted = true;
       this.startTimer();
       this.saveQuizState();
@@ -161,6 +159,7 @@ export class AIQuizComponent implements OnInit, OnDestroy {
     this.userAnswers = {};
     this.lockedQuestions = {};
     this.questionTimers = {};
+    this.shuffledOptions = {};
     this.currentQuestionIndex = 0;
   }
 
@@ -177,19 +176,18 @@ export class AIQuizComponent implements OnInit, OnDestroy {
     this.clearTimer();
     const q = this.currentQuestion;
     if (!q || !this.questionTimers.hasOwnProperty(q._id)) return;
-
     this.timer = this.questionTimers[q._id];
     this.timerInterval = setInterval(() => {
-      if (this.timer > 0) {           // Add this check
+      if (this.timer > 0) {
         this.timer--;
         this.questionTimers[q._id] = this.timer;
         this.saveQuizState();
       }
+
       if (this.timer <= 0) {
         this.handleTimerExpire();
       }
     }, 1000);
-
   }
 
   clearTimer() {
@@ -205,7 +203,6 @@ export class AIQuizComponent implements OnInit, OnDestroy {
     if (q) {
       this.lockedQuestions[q._id] = true;
       this.saveQuizState();
-
       const nextQuestionIndex = this.findNextQuestionWithTime();
       if (nextQuestionIndex !== -1) {
         this.currentQuestionIndex = nextQuestionIndex;
@@ -223,10 +220,12 @@ export class AIQuizComponent implements OnInit, OnDestroy {
       const q = this.questions[i];
       if (q && !this.lockedQuestions[q._id] && this.questionTimers[q._id] > 0) return i;
     }
+
     for (let i = 0; i < this.currentQuestionIndex; i++) {
       const q = this.questions[i];
       if (q && !this.lockedQuestions[q._id] && this.questionTimers[q._id] > 0) return i;
     }
+
     return -1;
   }
 
@@ -240,6 +239,7 @@ export class AIQuizComponent implements OnInit, OnDestroy {
       quizCompleted: this.quizCompleted
     };
     this.aiQuizService.saveQuizState(state);
+    this.saveShuffledOptions();
   }
 
   submitQuiz() {
@@ -251,24 +251,31 @@ export class AIQuizComponent implements OnInit, OnDestroy {
     }
 
     this.isSubmitting = true;
-    const questionResponses = this.questions.map(q => ({
-      questionId: q._id,
-      question: q.question,
-      skill: q.skill,
-      level: q.level,
-      userAnswer: this.userAnswers[q._id] || '',
-      correctanswer: q.correctanswer,
-      isCorrect: (this.userAnswers[q._id] || '').toLowerCase() === q.correctanswer.toLowerCase(),
-      options: q.options
-    }));
-
+    
+    const questionResponses = this.questions.map(q => {
+      const shuffledOptions = this.shuffledOptions[q._id] || [];
+      const selectedOption = shuffledOptions.find(opt => opt.key === this.userAnswers[q._id]);
+      const originalAnswer = selectedOption ? selectedOption.originalKey : this.userAnswers[q._id] || '';
+      
+      return {
+        questionId: q._id,
+        question: q.question,
+        skill: q.skill,
+        level: q.level,
+        userAnswer: originalAnswer,
+        correctanswer: q.correctanswer,
+        isCorrect: originalAnswer.toLowerCase() === q.correctanswer.toLowerCase(),
+        options: q.options
+      };
+    });
+    
     this.aiQuizService.submitQuiz(userId, questionResponses).subscribe({
       next: () => {
         this.quizCompleted = true;
         this.testStarted = false;
         this.isSubmitting = false;
         this.aiQuizService.clearQuizStorage();
-        localStorage.setItem('aiQuizCompleted', 'true'); // Keep this to prevent re-taking
+        localStorage.setItem('aiQuizCompleted', 'true');
       },
       error: () => {
         alert('Error submitting quiz. Please try again.');
@@ -289,11 +296,45 @@ export class AIQuizComponent implements OnInit, OnDestroy {
     this.updateSelectedAnswerForCurrentQuestion();
   }
 
-  getOptions(q: any): { key: string; value: string }[] {
-    return q?.options ? Object.entries(q.options).map(([key, value]) => ({
-      key: key.toUpperCase(),
-      value: String(value)
-    })) : [];
+  getOptions(q?: any): Array<{ key: string; value: string; originalKey: string }> {
+    const qq = q || this.currentQuestion;
+    if (!qq) return [];
+
+    // Check if we already have shuffled options for this question
+    if (this.shuffledOptions[qq._id]) {
+      return this.shuffledOptions[qq._id];
+    }
+
+    // Create original options with original keys
+    const originalOptions: Array<{ key: string; value: string; originalKey: string }> = [];
+    if (qq.options) {
+      Object.entries(qq.options).forEach(([key, value]) => {
+        originalOptions.push({ 
+          key: key.toUpperCase(), 
+          value: String(value),
+          originalKey: key.toLowerCase()
+        });
+      });
+    }
+
+    // Shuffle the options using Fisher-Yates algorithm
+    const shuffled = [...originalOptions];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+
+    // Assign new display keys (A, B, C, D) but keep original keys for answer checking
+    const shuffledWithNewKeys = shuffled.map((option, index) => ({
+      key: String.fromCharCode(65 + index), // A, B, C, D
+      value: option.value,
+      originalKey: option.originalKey
+    }));
+
+    // Store shuffled options for this question
+    this.shuffledOptions[qq._id] = shuffledWithNewKeys;
+    this.saveShuffledOptions();
+    return shuffledWithNewKeys;
   }
 
   trackByOptionKey(index: number, option: any): string {
@@ -304,5 +345,36 @@ export class AIQuizComponent implements OnInit, OnDestroy {
     const mins = Math.floor(this.timer / 60);
     const secs = this.timer % 60;
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  }
+
+  private shuffleArray(array: AIQuestion[]): AIQuestion[] {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  }
+
+  private saveShuffledOptions(): void {
+    const userId = this.aiQuizService.getUserIdFromToken();
+    if (!userId) return;
+    localStorage.setItem(
+      `aiShuffledOptions_${userId}`,
+      JSON.stringify(this.shuffledOptions)
+    );
+  }
+
+  private restoreShuffledOptions(): void {
+    try {
+      const userId = this.aiQuizService.getUserIdFromToken();
+      if (!userId) return;
+      const shuffled = localStorage.getItem(`aiShuffledOptions_${userId}`);
+      if (shuffled) {
+        this.shuffledOptions = JSON.parse(shuffled);
+      }
+    } catch {
+      this.shuffledOptions = {};
+    }
   }
 }

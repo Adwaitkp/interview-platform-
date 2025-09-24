@@ -39,6 +39,7 @@ export class QuizComponent implements OnInit, OnDestroy {
   questionTimeMap: { [level: string]: number } = { 'beginner': 90, 'intermediate': 120, 'advanced': 150 };
   questionTimers: { [key: string]: number } = {};
   lockedQuestions: { [key: string]: boolean } = {};
+  shuffledOptions: { [questionId: string]: Array<{ key: string; value: string; originalKey: string }> } = {};
   alreadyAttempted: boolean = false;
   skills: string[] = [];
   levels: string[] = [];
@@ -101,6 +102,12 @@ export class QuizComponent implements OnInit, OnDestroy {
     if (savedQuizCompleted === 'true') {
       this.quizCompleted = true;
     }
+    
+    // Restore shuffled options
+    const savedShuffledOptions = localStorage.getItem(`shuffledOptions_${localStorage.getItem('intervieweeId')}`);
+    if (savedShuffledOptions) {
+      try { this.shuffledOptions = JSON.parse(savedShuffledOptions); } catch { this.shuffledOptions = {}; }
+    }
   }
 
   loadUserQuestionCounts() {
@@ -127,22 +134,21 @@ export class QuizComponent implements OnInit, OnDestroy {
     this.loading = true;
     const token = localStorage.getItem('token');
     const userId = localStorage.getItem('intervieweeId');
-    // console.log('Fetching questions for userId:', userId);
+    
     if (!userId) {
-      // console.error('No userId found in localStorage (intervieweeId)');
       this.loading = false;
       this.questions = [];
       return;
     }
+    
     const apiUrl = `${environment.apiUrl}/questions?userId=${userId}`;
-    // console.log('API URL:', apiUrl);
+    
     this.http.get(apiUrl, {
       headers: token ? { Authorization: `Bearer ${token}` } : {}
     }).subscribe({
       next: (questions: any) => {
-        // console.log('Questions response:', questions);
         this.questions = Array.isArray(questions) ? questions : [];
-        // Set skills and levels from questions
+        
         if (this.questions.length > 0) {
           this.skills = Array.from(new Set(this.questions.map(q => q.skill))).filter(Boolean);
           this.levels = Array.from(new Set(this.questions.map(q => q.level))).filter(Boolean);
@@ -161,13 +167,11 @@ export class QuizComponent implements OnInit, OnDestroy {
     });
   }
 
-  // FIX APPLIED: Restores question index from localStorage if valid, else sets to 0
   private initializeQuizAfterLoad() {
     if (this.questions.length === 0) return;
     if (this.quizCompleted) return;
     this.initTimers();
 
-    // Restore question index if valid, else default to zero
     const savedIndex = localStorage.getItem('currentQuestionIndex');
     let index = 0;
     if (savedIndex && !isNaN(Number(savedIndex))) {
@@ -195,11 +199,6 @@ export class QuizComponent implements OnInit, OnDestroy {
     } else {
       this.selectedAnswer = '';
     }
-    // console.log('updateSelectedAnswerForCurrentQuestion:', {
-    //   currentQuestion: this.currentQuestion?._id,
-    //   selectedAnswer: this.selectedAnswer,
-    //   userAnswers: this.userAnswers
-    // });
     this.cdr.detectChanges();
   }
 
@@ -243,11 +242,6 @@ export class QuizComponent implements OnInit, OnDestroy {
       this.userAnswers[this.currentQuestion._id] = option;
       this.saveQuizState();
     }
-    // console.log('onAnswerSelect:', {
-    //   currentQuestion: this.currentQuestion?._id,
-    //   selectedAnswer: this.selectedAnswer,
-    //   userAnswers: this.userAnswers
-    // });
     this.cdr.detectChanges();
   }
 
@@ -322,25 +316,20 @@ export class QuizComponent implements OnInit, OnDestroy {
       this.lockedQuestions[q._id] = true;
       this.saveQuizState();
 
-      // Find next question with time remaining
       let nextQuestionIndex = this.findNextQuestionWithTime();
 
       if (nextQuestionIndex !== -1) {
-        // Move to the next question that has time remaining
         this.currentQuestionIndex = nextQuestionIndex;
         this.updateSelectedAnswerForCurrentQuestion();
         this.startTimer();
         this.saveQuizState();
       } else {
-        // All questions are either locked or have no time remaining
-        // Only then should we submit the quiz
         this.submitQuiz();
       }
     }
   }
 
   findNextQuestionWithTime(): number {
-    // First, check questions after current index
     for (let i = this.currentQuestionIndex + 1; i < this.questions.length; i++) {
       const question = this.questions[i];
       if (question && !this.lockedQuestions[question._id] && this.questionTimers[question._id] > 0) {
@@ -348,7 +337,6 @@ export class QuizComponent implements OnInit, OnDestroy {
       }
     }
 
-    // If no questions found after current index, check from beginning
     for (let i = 0; i < this.currentQuestionIndex; i++) {
       const question = this.questions[i];
       if (question && !this.lockedQuestions[question._id] && this.questionTimers[question._id] > 0) {
@@ -356,7 +344,6 @@ export class QuizComponent implements OnInit, OnDestroy {
       }
     }
 
-    // No questions with time remaining found
     return -1;
   }
 
@@ -387,16 +374,24 @@ export class QuizComponent implements OnInit, OnDestroy {
       return;
     }
     this.isSubmitting = true;
-    const questionResponses = this.questions.map(q => ({
-      questionId: q._id,
-      question: q.question,
-      skill: q.skill,
-      level: q.level,
-      userAnswer: this.userAnswers[q._id] || '',
-      correctanswer: q.correctanswer,
-      isCorrect: (this.userAnswers[q._id] || '').toLowerCase() === q.correctanswer.toLowerCase(),
-      options: q.options
-    }));
+    
+    const questionResponses = this.questions.map(q => {
+      const shuffledOptions = this.shuffledOptions[q._id] || [];
+      const selectedOption = shuffledOptions.find(opt => opt.key === this.userAnswers[q._id]);
+      const originalAnswer = selectedOption ? selectedOption.originalKey : this.userAnswers[q._id] || '';
+      
+      return {
+        questionId: q._id,
+        question: q.question,
+        skill: q.skill,
+        level: q.level,
+        userAnswer: originalAnswer,
+        correctanswer: q.correctanswer,
+        isCorrect: originalAnswer.toLowerCase() === q.correctanswer.toLowerCase(),
+        options: q.options
+      };
+    });
+    
     this.http.post(`${environment.apiUrl}/quiz/submit`, {
       userId: intervieweeId,
       questionResponses
@@ -427,11 +422,40 @@ export class QuizComponent implements OnInit, OnDestroy {
     this.updateSelectedAnswerForCurrentQuestion();
   }
 
-  getOptions(q: any): { key: string; value: string }[] {
-    return q?.options ? Object.entries(q.options).map(([key, value]) => ({
-      key: key.toUpperCase(),
-      value: String(value)
-    })) : [];
+  getOptions(q?: any): Array<{ key: string; value: string; originalKey: string }> {
+    const qq = q || this.currentQuestion;
+    if (!qq) return [];
+
+    if (this.shuffledOptions[qq._id]) {
+      return this.shuffledOptions[qq._id];
+    }
+
+    const originalOptions: Array<{ key: string; value: string; originalKey: string }> = [];
+    if (qq.options) {
+      Object.entries(qq.options).forEach(([key, value]) => {
+        originalOptions.push({
+          key: key.toUpperCase(),
+          value: String(value),
+          originalKey: key.toLowerCase()
+        });
+      });
+    }
+
+    const shuffled = [...originalOptions];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+
+    const shuffledWithNewKeys = shuffled.map((option, index) => ({
+      key: String.fromCharCode(65 + index), // A, B, C, D
+      value: option.value,
+      originalKey: option.originalKey
+    }));
+
+    this.shuffledOptions[qq._id] = shuffledWithNewKeys;
+    this.saveShuffledOptions();
+    return shuffledWithNewKeys;
   }
 
   trackByOptionKey(index: number, option: any): string {
@@ -442,5 +466,11 @@ export class QuizComponent implements OnInit, OnDestroy {
     const mins = Math.floor(this.timer / 60);
     const secs = this.timer % 60;
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  }
+  
+  private saveShuffledOptions(): void {
+    const userId = localStorage.getItem('intervieweeId');
+    if (!userId) return;
+    localStorage.setItem(`shuffledOptions_${userId}`, JSON.stringify(this.shuffledOptions));
   }
 }

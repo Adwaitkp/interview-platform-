@@ -3,7 +3,7 @@ import questionCRUDRouter from './question-crud/questionCRUD';
 import { Questions } from '../models/Questions';
 import User from '../models/User';
 import mongoose from 'mongoose';
-import isAdmin from '../middleware/isadmin';
+
 
 const router = express.Router();
 
@@ -14,7 +14,7 @@ router.get('/', async (req: Request, res: Response) => {
     const pageNum = parseInt(page as string) || 0;
     const limitNum = parseInt(limit as string) || 10;
     const searchTerm = search as string || '';
-    
+
     if (userId) {
       try {
         const user = await User.findById(userId);
@@ -35,7 +35,7 @@ router.get('/', async (req: Request, res: Response) => {
               // Handle both Map objects and plain objects (from MongoDB)
               let hasAssignedQuestions = false;
               let existingIds: string[] = [];
-              
+
               if (user.assignedQuestions) {
                 if (user.assignedQuestions instanceof Map) {
                   hasAssignedQuestions = user.assignedQuestions.has(key);
@@ -50,18 +50,24 @@ router.get('/', async (req: Request, res: Response) => {
                   }
                 }
               }
-              
+
               if (hasAssignedQuestions && existingIds.length > 0) {
-                // ...existing code...
                 try {
                   const questions = await Questions.find({
                     _id: { $in: existingIds.map(id => new mongoose.Types.ObjectId(id)) }
                   });
-                  allQuestions.push(...questions);
+
+                  // Maintain the exact order as stored in assignedQuestions
+                  const orderedQuestions = existingIds.map(id =>
+                    questions.find(q => String(q._id) === id)
+                  ).filter(Boolean);
+
+                  allQuestions.push(...orderedQuestions);
                 } catch (err) {
                   // Handle error silently
                 }
-              } else {
+              }
+              else {
                 // Assign new questions
                 try {
                   // Use the count from questionCounts to determine how many questions to fetch
@@ -70,15 +76,13 @@ router.get('/', async (req: Request, res: Response) => {
                     skill: new RegExp(`^${userSkill}$`, 'i'),
                     level: new RegExp(`^${userLevel}$`, 'i')
                   });
-                  
+
                   // Randomly select 'count' questions if we have more than needed
                   let selectedQuestions = availableQuestions;
-                  if (availableQuestions.length > count) {
-                    // Shuffle the array and take the first 'count' elements
-                    selectedQuestions = availableQuestions
-                      .sort(() => 0.5 - Math.random())
-                      .slice(0, count);
-                  }
+                  // Always shuffle questions, then take the required count
+                  selectedQuestions = availableQuestions
+                    .sort(() => 0.5 - Math.random())
+                    .slice(0, count);
 
                   if (selectedQuestions.length > 0) {
                     allQuestions.push(...selectedQuestions);
@@ -105,12 +109,12 @@ router.get('/', async (req: Request, res: Response) => {
             }
             user.assignedQuestions = tempMap;
           }
-          
+
           // Merge the new assignments with existing ones
           for (const [key, value] of assignedQuestionsMap.entries()) {
             user.assignedQuestions.set(key, value);
           }
-          
+
           // Save the user with the updated map
           try {
             await user.save();
@@ -119,17 +123,19 @@ router.get('/', async (req: Request, res: Response) => {
           }
         }
 
+        // REMOVED: Final shuffle - return questions in consistent order
         return res.status(200).json(allQuestions);
-              } catch (err) {
-          return res.status(500).json({ message: 'Internal server error (userId logic)' });
-        }
+
+      } catch (err) {
+        return res.status(500).json({ message: 'Internal server error (userId logic)' });
+      }
     }
 
     // Original non-userId logic with pagination and search
     const filter: any = {};
     if (skill) filter.skill = new RegExp(`^${skill}$`, 'i');
     if (level) filter.level = new RegExp(`^${level}$`, 'i');
-    
+
     // Add search functionality
     if (searchTerm) {
       filter.$or = [
@@ -138,18 +144,18 @@ router.get('/', async (req: Request, res: Response) => {
         { level: { $regex: searchTerm, $options: 'i' } }
       ];
     }
-    
+
     // Get total count for pagination
     const total = await Questions.countDocuments(filter);
-    
+
     // Apply pagination
     let query = Questions.find(filter)
       .skip(pageNum * limitNum)
       .limit(limitNum)
       .sort({ createdAt: -1 });
-    
+
     const questions = await query;
-    
+
     res.status(200).json({
       questions,
       totalPages: Math.ceil(total / limitNum),

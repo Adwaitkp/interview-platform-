@@ -60,7 +60,7 @@
               d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 15.5c-.77.833.192 2.5 1.732 2.5z">
             </path>
           </svg>
-          AI Questions - Pending Review ({{ aiQuestions.length }})
+           AI Questions - Pending Review ({{ aiTotalQuestions || aiQuestions.length }})
         </h2>
         <button (click)="showApproveAllConfirmation()" [disabled]="isBulkProcessing"
           class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:opacity-50">
@@ -167,7 +167,7 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
         </svg>
-        Accepted Questions ({{ acceptedQuestions.length }})
+        Accepted Questions ({{ acceptedTotalQuestions || acceptedQuestions.length }})
       </h2>
     </div>
 
@@ -319,7 +319,7 @@
         </svg>
       </div>
       <div class="mt-2">
-        <p class="text-sm text-gray-500 dark:text-gray-400 text-center">Are you sure you want to approve all {{ aiQuestions.length }}
+        <p class="text-sm text-gray-500 dark:text-gray-400 text-center">Are you sure you want to approve all 
           questions?</p>
       </div>
       <div class="flex gap-3 justify-end mt-4">

@@ -84,7 +84,7 @@
               <span class="ml-3 text-gray-700 dark:text-gray-200"
                 [class.cursor-pointer]="!lockedQuestions[currentQuestion._id]"
                 [class.cursor-not-allowed]="lockedQuestions[currentQuestion._id]">
-                {{ option.key.toLowerCase() }}. {{ option.value }}
+                {{ option.key.toUpperCase() }}. {{ option.value }}
               </span>
             </label>
           </div>
