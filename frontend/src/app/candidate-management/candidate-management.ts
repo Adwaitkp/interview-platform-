@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { AddIntervieweeComponent } from '../add-interviewee/add-interviewee';
 import { CandidateManagementService } from '../services/candidate-management.service';
 import { User } from '../models/user.model';
+import { environment } from '../../environments/environment';
 
 @Component({
   selector: 'app-candidate-management',
@@ -50,6 +51,18 @@ export class CandidateManagement implements OnInit {
   availableSetIds: { setId: string; label: string }[] = [];
   selectedSetId: string = '';
   showSetChoiceModal: boolean = false;
+  // Question Type Control Modal Properties
+  showNormalQuizModal: boolean = false;
+  selectedUserForNormal: User | null = null;
+  questionTypeConfig = {
+    multipleChoice: 0,
+    trueFalse: 0,
+    singleChoice: 0,
+    totalQuestions: 0
+  };
+
+  skillLevelQuestionTypes: { skill: string; level: string; multipleChoice: number; trueFalse: number; singleChoice: number; total: number }[] = [];
+
   useExistingSet: boolean = false;
 
   sortField: string = '';
@@ -612,17 +625,142 @@ export class CandidateManagement implements OnInit {
   validateQuestionCount(index: number, event: Event): void {
     const target = event.target as HTMLInputElement;
     let value = parseInt(target.value) || 0;
-    
+
     // Enforce limits
     if (value > 10) {
-      value = value % 10 ; 
-    } 
-    
+      value = value % 10;
+    }
+
     // Update the skillLevels array
     this.skillLevels[index].count = value;
-    
+
     // Update the input field value
     target.value = value.toString();
+  }
+  openNormalQuizConfig(user: User) {
+    this.selectedUserForNormal = user;
+
+    // Create skill-level combinations
+    this.skillLevelQuestionTypes = [];
+
+    if (user.questionCounts) {
+      Object.keys(user.questionCounts).forEach(skill => {
+        if (user.questionCounts && user.questionCounts[skill]) {
+          Object.keys(user.questionCounts[skill]).forEach(level => {
+            if (user.questionCounts && user.questionCounts[skill]) {
+              const total = user.questionCounts[skill][level];
+              if (total > 0) {
+                // Check if user has existing question type configuration
+                const existingConfig = user.questionTypeConfig?.find((config: any) =>
+                  config.skill === skill && config.level === level
+                );
+
+                this.skillLevelQuestionTypes.push({
+                  skill: skill,
+                  level: level,
+                  multipleChoice: existingConfig?.multipleChoice || 0,
+                  trueFalse: existingConfig?.trueFalse || 0,
+                  singleChoice: existingConfig?.singleChoice || total,
+                  total: total
+                });
+              }
+            }
+          });
+        }
+      });
+    }
+
+    this.showNormalQuizModal = true;
+  }
+
+  calculateTotalQuestions(user: User): number {
+    if (!user.questionCounts) return 0;
+
+    let total = 0;
+    const questionCounts = user.questionCounts;
+
+    Object.keys(questionCounts).forEach(skill => {
+      Object.keys(questionCounts[skill]).forEach(level => {
+        total += questionCounts[skill][level];
+      });
+    });
+    return total;
+  }
+
+
+  onQuestionTypeChange() {
+    const { multipleChoice, trueFalse, totalQuestions } = this.questionTypeConfig;
+    this.questionTypeConfig.singleChoice = Math.max(0, totalQuestions - multipleChoice - trueFalse);
+  }
+  updateQuestionTypeDistribution(index: number) {
+    const skillLevel = this.skillLevelQuestionTypes[index];
+    const used = skillLevel.multipleChoice + skillLevel.trueFalse;
+    skillLevel.singleChoice = Math.max(0, skillLevel.total - used);
+
+    // Validate the inputs
+    if (skillLevel.multipleChoice < 0) skillLevel.multipleChoice = 0;
+    if (skillLevel.trueFalse < 0) skillLevel.trueFalse = 0;
+    if (used > skillLevel.total) {
+      // Prioritize multiple choice, then true/false
+      if (skillLevel.multipleChoice > skillLevel.total) {
+        skillLevel.multipleChoice = skillLevel.total;
+        skillLevel.trueFalse = 0;
+      } else {
+        skillLevel.trueFalse = skillLevel.total - skillLevel.multipleChoice;
+      }
+      skillLevel.singleChoice = 0;
+    }
+  }
+
+  validateAllQuestionTypes(): boolean {
+    return this.skillLevelQuestionTypes.every(skillLevel => {
+      const total = skillLevel.multipleChoice + skillLevel.trueFalse + skillLevel.singleChoice;
+      return total === skillLevel.total &&
+        skillLevel.multipleChoice >= 0 &&
+        skillLevel.trueFalse >= 0 &&
+        skillLevel.singleChoice >= 0;
+    });
+  }
+
+  assignNormalQuizWithTypes() {
+    if (!this.selectedUserForNormal || !this.validateAllQuestionTypes()) {
+      alert('Invalid question type configuration! Please check your inputs.');
+      return;
+    }
+
+    // Prepare the question type configuration
+    const questionTypeConfig = this.skillLevelQuestionTypes;
+
+    // Store the configuration for this user (you might want to save this to the user model)
+    this.candidateService.updateUserQuestionTypeConfig(
+      this.selectedUserForNormal._id,
+      questionTypeConfig
+    ).subscribe({
+      next: () => {
+        this.assignQuizType(this.selectedUserForNormal!._id, 'normal').then(() => {
+          this.closeNormalQuizModal();
+          this.getAllUsers();
+        }).catch(err => {
+          console.error('Failed to assign normal quiz:', err);
+          alert('Failed to assign normal quiz');
+        });
+      },
+      error: (err: any) => {
+        console.error('Failed to save question type configuration:', err);
+        alert('Failed to save configuration');
+      }
+    });
+  }
+  validateQuestionTypeAvailability(): boolean {
+    return this.skillLevelQuestionTypes.every(skillLevel => {
+      const total = skillLevel.multipleChoice + skillLevel.trueFalse + skillLevel.singleChoice;
+      return total <= skillLevel.total && total >= 0;
+    });
+  }
+
+  closeNormalQuizModal() {
+    this.showNormalQuizModal = false;
+    this.selectedUserForNormal = null;
   }
 
 }

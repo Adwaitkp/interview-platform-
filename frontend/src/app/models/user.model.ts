@@ -9,4 +9,12 @@ export interface User {
   quizType?: 'normal' | 'ai';
   assignedSetId?: string | null;
   createdAt?: string;
+  questionTypeConfig?: Array<{
+    skill: string;
+    level: string;
+    multipleChoice: number;
+    trueFalse: number;
+    singleChoice: number;
+    total: number;
+  }>;
 }

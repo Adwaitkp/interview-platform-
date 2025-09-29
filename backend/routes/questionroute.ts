@@ -4,13 +4,12 @@ import { Questions } from '../models/Questions';
 import User from '../models/User';
 import mongoose from 'mongoose';
 
-
 const router = express.Router();
 
 /* GET /questions */
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { skill, level, limit, userId, page, search } = req.query;
+    const { skill, level, limit, userId, page, search, questionTypeConfig } = req.query;
     const pageNum = parseInt(page as string) || 0;
     const limitNum = parseInt(limit as string) || 10;
     const searchTerm = search as string || '';
@@ -24,6 +23,10 @@ router.get('/', async (req: Request, res: Response) => {
 
         const allQuestions: any[] = [];
         const assignedQuestionsMap = new Map<string, string[]>();
+
+        // Use question type configuration from user record if available
+        let configArray = user.questionTypeConfig || [];
+
         for (const userSkill in user.questionCounts) {
           for (const userLevel in user.questionCounts[userSkill]) {
             const count = user.questionCounts[userSkill][userLevel];
@@ -31,6 +34,12 @@ router.get('/', async (req: Request, res: Response) => {
               // Ensure consistent key format
               const safeSkill = userSkill.replace(/\./g, '__');
               const key = `${safeSkill}_${userLevel}`;
+
+              // Find configuration for this skill-level combination
+              const config = configArray.find((c: any) =>
+                c.skill === userSkill && c.level === userLevel
+              );
+
               // Check if questions already assigned
               // Handle both Map objects and plain objects (from MongoDB)
               let hasAssignedQuestions = false;
@@ -52,6 +61,7 @@ router.get('/', async (req: Request, res: Response) => {
               }
 
               if (hasAssignedQuestions && existingIds.length > 0) {
+                // Return existing questions if they are already assigned
                 try {
                   const questions = await Questions.find({
                     _id: { $in: existingIds.map(id => new mongoose.Types.ObjectId(id)) }
@@ -68,21 +78,83 @@ router.get('/', async (req: Request, res: Response) => {
                 }
               }
               else {
-                // Assign new questions
+                // Assign new questions based on configuration or default
                 try {
-                  // Use the count from questionCounts to determine how many questions to fetch
-                  // Make sure we're getting the exact count specified
-                  const availableQuestions = await Questions.find({
-                    skill: new RegExp(`^${userSkill}$`, 'i'),
-                    level: new RegExp(`^${userLevel}$`, 'i')
-                  });
+                  const selectedQuestions: any[] = [];
 
-                  // Randomly select 'count' questions if we have more than needed
-                  let selectedQuestions = availableQuestions;
-                  // Always shuffle questions, then take the required count
-                  selectedQuestions = availableQuestions
-                    .sort(() => 0.5 - Math.random())
-                    .slice(0, count);
+                  if (config) {
+                    // Use question type configuration
+                    const { multipleChoice = 0, trueFalse = 0, singleChoice = 0 } = config;
+
+                    // Validate that total doesn't exceed available count
+                    const requestedTotal = multipleChoice + trueFalse + singleChoice;
+                    if (requestedTotal > count) {
+                      console.warn(`Requested questions (${requestedTotal}) exceed available count (${count}) for ${userSkill}-${userLevel}`);
+                      continue;
+                    }
+
+                    // Fetch Single Choice Questions (type 'single')
+                    if (singleChoice > 0) {
+                      const availableSingle = await Questions.find({
+                        skill: new RegExp(`^${userSkill}$`, 'i'),
+                        level: new RegExp(`^${userLevel}$`, 'i'),
+                        type: 'single'
+                      });
+
+                      if (availableSingle.length < singleChoice) {
+                        console.warn(`Not enough single choice questions available. Requested: ${singleChoice}, Available: ${availableSingle.length}`);
+                      }
+
+                      const shuffledSingle = availableSingle.sort(() => 0.5 - Math.random()).slice(0, singleChoice);
+                      selectedQuestions.push(...shuffledSingle);
+                    }
+
+                    // Fetch Multiple Choice Questions (type 'multiple')  
+                    if (multipleChoice > 0) {
+                      const availableMultiple = await Questions.find({
+                        skill: new RegExp(`^${userSkill}$`, 'i'),
+                        level: new RegExp(`^${userLevel}$`, 'i'),
+                        type: 'multiple'
+                      });
+
+                      if (availableMultiple.length < multipleChoice) {
+                        console.warn(`Not enough multiple choice questions available. Requested: ${multipleChoice}, Available: ${availableMultiple.length}`);
+                      }
+
+                      const shuffledMultiple = availableMultiple.sort(() => 0.5 - Math.random()).slice(0, multipleChoice);
+                      selectedQuestions.push(...shuffledMultiple);
+                    }
+
+                    // Fetch True/False Questions (type 'truefalse')
+                    if (trueFalse > 0) {
+                      const availableTrueFalse = await Questions.find({
+                        skill: new RegExp(`^${userSkill}$`, 'i'),
+                        level: new RegExp(`^${userLevel}$`, 'i'),
+                        type: 'truefalse'
+                      });
+
+                      if (availableTrueFalse.length < trueFalse) {
+                        console.warn(`Not enough true/false questions available. Requested: ${trueFalse}, Available: ${availableTrueFalse.length}`);
+                      }
+
+                      const shuffledTrueFalse = availableTrueFalse.sort(() => 0.5 - Math.random()).slice(0, trueFalse);
+                      selectedQuestions.push(...shuffledTrueFalse);
+                    }
+
+                    // Final shuffle of all selected questions
+                    selectedQuestions.sort(() => 0.5 - Math.random());
+                  } else {
+                    // Default behavior - random questions without type filtering
+                    const availableQuestions = await Questions.find({
+                      skill: new RegExp(`^${userSkill}$`, 'i'),
+                      level: new RegExp(`^${userLevel}$`, 'i')
+                    });
+
+                    // Randomly select 'count' questions if we have more than needed
+                    selectedQuestions.push(...availableQuestions
+                      .sort(() => 0.5 - Math.random())
+                      .slice(0, count));
+                  }
 
                   if (selectedQuestions.length > 0) {
                     allQuestions.push(...selectedQuestions);
@@ -223,7 +295,32 @@ router.get('/level/:level', async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 });
+/* PUT /questions/users/:userId/question-type-config */
+router.put('/users/:userId/question-type-config', async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const { questionTypeConfig } = req.body;
 
+    if (!userId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ message: 'Invalid user ID format' });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { questionTypeConfig: questionTypeConfig },
+      { new: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.status(200).json({ message: 'Question type configuration updated successfully', user });
+  } catch (err: any) {
+    console.error('Error updating question type config:', err.message || err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
 
 router.use('/', questionCRUDRouter);
 export default router;

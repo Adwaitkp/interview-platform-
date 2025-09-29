@@ -78,4 +78,10 @@ export class CandidateManagementService {
         headers: this.getAuthHeaders().set('Content-Type', 'application/json')
     });
   }
+
+  updateUserQuestionTypeConfig(userId: string, config: any): Observable<any> {
+    return this.http.put(`${environment.apiUrl}/questions/users/${userId}/question-type-config`, {
+      questionTypeConfig: config
+    }, { headers: this.getAuthHeaders() });
+  }
 }

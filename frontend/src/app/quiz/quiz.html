@@ -59,35 +59,48 @@
               currentQuestion.level | titlecase }}</span>
           </div>
 
-          <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">{{ currentQuestionIndex + 1 }}. {{
-            currentQuestion.question }}</h3>
+          <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
+            {{ currentQuestionIndex + 1 }}. {{ currentQuestion.question }}
+            <span *ngIf="currentQuestion.type === 'multiple'"
+              class="text-sm text-purple-600 dark:text-purple-400 ml-2 font-bold">(Multiple Choice)</span>
+          </h3>
+
           <div class="space-y-3">
             <label *ngFor="let option of getOptions(currentQuestion); trackBy: trackByOptionKey"
               class="flex items-center p-3 border border-gray-200 dark:border-gray-600 rounded-md transition duration-200"
-              [class.bg-blue-50]="selectedAnswer === option.key && !lockedQuestions[currentQuestion._id]"
-              [class.dark:bg-blue-900]="selectedAnswer === option.key && !lockedQuestions[currentQuestion._id]"
-              [class.border-blue-500]="selectedAnswer === option.key && !lockedQuestions[currentQuestion._id]"
-              [class.dark:border-blue-400]="selectedAnswer === option.key && !lockedQuestions[currentQuestion._id]"
+              [class.bg-blue-50]="isOptionSelected(option.key) && !lockedQuestions[currentQuestion._id]"
+              [class.dark:bg-blue-900]="isOptionSelected(option.key) && !lockedQuestions[currentQuestion._id]"
+              [class.border-blue-500]="isOptionSelected(option.key) && !lockedQuestions[currentQuestion._id]"
+              [class.dark:border-blue-400]="isOptionSelected(option.key) && !lockedQuestions[currentQuestion._id]"
               [class.cursor-pointer]="!lockedQuestions[currentQuestion._id]"
               [class.cursor-not-allowed]="lockedQuestions[currentQuestion._id]"
               [class.opacity-60]="lockedQuestions[currentQuestion._id]"
               [class.hover:bg-gray-50]="!lockedQuestions[currentQuestion._id]"
               [class.dark:hover:bg-gray-700]="!lockedQuestions[currentQuestion._id]"
-              (click)="!lockedQuestions[currentQuestion._id] ? onAnswerSelect(option.key) : null">
-              <input type="radio" [name]="'question_' + currentQuestion._id" [value]="option.key"
-                [(ngModel)]="selectedAnswer"
-                (change)="!lockedQuestions[currentQuestion._id] ? onAnswerSelect(option.key) : null"
-                [class.cursor-pointer]="!lockedQuestions[currentQuestion._id]"
-                [class.cursor-not-allowed]="lockedQuestions[currentQuestion._id]"
+              (click)="!lockedQuestions[currentQuestion._id] ? onOptionClick(option.key) : null">
+
+              <!-- Checkbox for multiple correct type -->
+              <input *ngIf="currentQuestion.type === 'multiple'; else singleChoiceTemplate" type="checkbox"
+                [value]="option.key" [checked]="selectedAnswers.includes(option.key)"
+                [disabled]="lockedQuestions[currentQuestion._id]"
                 class="h-4 w-4 text-blue-600 dark:text-blue-400 focus:ring-blue-500 dark:focus:ring-blue-400 border-gray-300 dark:border-gray-600"
-                [disabled]="lockedQuestions[currentQuestion._id]">
-              <span class="ml-3 text-gray-700 dark:text-gray-200"
-                [class.cursor-pointer]="!lockedQuestions[currentQuestion._id]"
-                [class.cursor-not-allowed]="lockedQuestions[currentQuestion._id]">
+                (change)="!lockedQuestions[currentQuestion._id] ? onMultipleAnswerChange($event, option.key) : null" />
+
+              <!-- Single choice and true/false radios -->
+              <ng-template #singleChoiceTemplate>
+                <input type="radio" [name]="'question_' + currentQuestion._id" [value]="option.key"
+                  [(ngModel)]="selectedAnswer"
+                  (change)="!lockedQuestions[currentQuestion._id] ? onAnswerSelect(option.key) : null"
+                  class="h-4 w-4 text-blue-600 dark:text-blue-400 focus:ring-blue-500 dark:focus:ring-blue-400 border-gray-300 dark:border-gray-600"
+                  [disabled]="lockedQuestions[currentQuestion._id]" />
+              </ng-template>
+
+              <span class="ml-3 text-gray-700 dark:text-gray-200">
                 {{ option.key.toUpperCase() }}. {{ option.value }}
               </span>
             </label>
           </div>
+
           <div *ngIf="lockedQuestions[currentQuestion._id]" class="mt-2 flex justify-center">
             <span class="text-red-600 dark:text-red-400 font-semibold text-center">Time's up! You cannot change your
               answer.</span>
@@ -113,7 +126,7 @@
         </div>
 
         <!-- Submit Button stays below -->
-        <div class="flex justify-end mb-4">
+        <div class="flex justify-end mb-4" *ngIf="canShowSubmitButton">
           <button (click)="submitQuiz()" [disabled]="isSubmitting"
             class="bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 text-white font-bold py-3 px-6 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">
             Submit Quiz

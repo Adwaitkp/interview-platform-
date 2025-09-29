@@ -118,7 +118,7 @@
       </div>
 
       <!-- Submit Button stays below -->
-      <div class="flex justify-end mb-4">
+      <div class="flex justify-end mb-4" *ngIf="canShowSubmitButton">
         <button (click)="submitQuiz()" [disabled]="isSubmitting"
           class="bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 text-white font-bold py-3 px-6 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">
           Submit Quiz

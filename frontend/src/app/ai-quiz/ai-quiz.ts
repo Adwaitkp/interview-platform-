@@ -377,4 +377,46 @@ export class AIQuizComponent implements OnInit, OnDestroy {
       this.shuffledOptions = {};
     }
   }
+
+  // Controls Submit button visibility per requirement:
+  // - visible on last question
+  // - if last question time is over, visible on second last
+  // - if last and second last are over, visible on third last
+  get canShowSubmitButton(): boolean {
+    if (!this.testStarted || this.quizCompleted) return false;
+    const len = this.questions.length;
+    if (len === 0) return false;
+    const lastIdx = len - 1;
+
+    const lastId = this.questions[lastIdx]?._id;
+    const lastExpired = this.isQuestionExpiredById(lastId);
+    if (!lastExpired) {
+      return this.currentQuestionIndex === lastIdx;
+    }
+
+    if (len >= 2) {
+      const secondIdx = len - 2;
+      const secondId = this.questions[secondIdx]?._id;
+      const secondExpired = this.isQuestionExpiredById(secondId);
+      if (!secondExpired) {
+        return this.currentQuestionIndex === secondIdx;
+      }
+
+      if (len >= 3) {
+        const thirdIdx = len - 3;
+        // When both last and second last are over, show on third last
+        return this.currentQuestionIndex === thirdIdx;
+      }
+    }
+
+    return false;
+  }
+
+  private isQuestionExpiredById(questionId?: string): boolean {
+    if (!questionId) return true;
+    const locked = !!this.lockedQuestions[questionId];
+    const timer = this.questionTimers[questionId];
+    const timedOut = typeof timer === 'number' ? timer <= 0 : false;
+    return locked || timedOut;
+  }
 }

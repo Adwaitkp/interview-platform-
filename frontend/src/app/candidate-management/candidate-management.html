@@ -105,7 +105,7 @@
         <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
           <tr *ngFor="let user of paginatedUsers; trackBy: trackByUserId; let i = index"
             class="hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150">
-            
+
             <!-- Edit Mode -->
             <ng-container *ngIf="editUserId === user._id">
               <td class="px-6 py-4">
@@ -166,7 +166,7 @@
               </td>
               <td class="px-6 py-4">
                 <div class="flex gap-2">
-                  <button (click)="assignQuizType(user._id, 'normal')" [disabled]="quizAssignmentLoading[user._id]"
+                  <button (click)="openNormalQuizConfig(user)" [disabled]="quizAssignmentLoading[user._id]"
                     [class]="getQuizTypeStatus(user) === 'Normal Quiz' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600'"
                     class="inline-flex items-center px-2 py-1 text-xs font-medium rounded transition-colors duration-200 disabled:opacity-50">
                     <span *ngIf="quizAssignmentLoading[user._id]" class="inline-flex items-center">
@@ -262,7 +262,7 @@
               </td>
               <td class="px-6 py-4">
                 <div class="flex gap-2">
-                  <button (click)="assignQuizType(user._id, 'normal')" [disabled]="quizAssignmentLoading[user._id]"
+                  <button (click)="openNormalQuizConfig(user)" [disabled]="quizAssignmentLoading[user._id]"
                     [class]="getQuizTypeStatus(user) === 'Normal Quiz' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600'"
                     class="inline-flex items-center px-2 py-1 text-xs font-medium rounded transition-colors duration-200 disabled:opacity-50">
                     <span *ngIf="quizAssignmentLoading[user._id]" class="inline-flex items-center">
@@ -682,4 +682,89 @@
       </div>
     </div>
   </div>
+  <!-- Normal Quiz Type Configuration Modal -->
+  <!-- Normal Quiz Type Configuration Modal -->
+  <div *ngIf="showNormalQuizModal" class="custom-dialog flex items-center justify-center">
+    <div
+      class="relative w-11/12 max-w-4xl bg-white dark:bg-gray-900 border dark:border-gray-700 rounded-2xl shadow-lg overflow-hidden">
+
+      <!-- Title bar fixed -->
+      <div
+        class="sticky top-0 bg-white dark:bg-gray-900 z-10 p-6 flex justify-between items-center border-b dark:border-gray-700">
+        <div>
+          <h3 class="text-xl font-medium text-gray-900 dark:text-white">Configure Quiz Types</h3>
+          <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            Configure question types for {{selectedUserForNormal?.name}}
+          </p>
+        </div>
+        <button (click)="closeNormalQuizModal()"
+          class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Scrollable content -->
+      <div class="p-6 max-h-[70vh] overflow-y-auto custom-scroll">
+        <div class="space-y-4">
+          <div *ngFor="let skillLevel of skillLevelQuestionTypes; let i = index"
+            class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+
+            <div class="grid grid-cols-5 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">Skill</label>
+                <input [value]="skillLevel.skill" readonly
+                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 cursor-not-allowed">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">Level</label>
+                <input [value]="skillLevel.level" readonly
+                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 cursor-not-allowed">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">Multiple Choice</label>
+                <input type="number" [(ngModel)]="skillLevel.multipleChoice"
+                  (input)="updateQuestionTypeDistribution(i); validateQuestionTypeAvailability()" min="0"
+                  [max]="skillLevel.total"
+                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:text-white">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">True/False</label>
+                <input type="number" [(ngModel)]="skillLevel.trueFalse"
+                  (input)="updateQuestionTypeDistribution(i); validateQuestionTypeAvailability()" min="0"
+                  [max]="skillLevel.total"
+                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:text-white">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">Single Choice</label>
+                <input type="number" [value]="skillLevel.singleChoice" readonly
+                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 cursor-not-allowed">
+              </div>
+            </div>
+
+            <!-- Total count display for each row -->
+            <div class="mt-2 text-right">
+              <span class="text-xs text-gray-500 dark:text-gray-400">
+                Total: {{skillLevel.total}} questions
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fixed footer with buttons -->
+      <div class="sticky bottom-0 bg-white dark:bg-gray-900 p-6 border-t dark:border-gray-700 flex gap-3 justify-end">
+        <button (click)="assignNormalQuizWithTypes()" [disabled]="!validateAllQuestionTypes()"
+          class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+          Assign Quiz
+        </button>
+        <button (click)="closeNormalQuizModal()"
+          class="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 text-sm font-medium rounded-md hover:bg-gray-400 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors duration-200">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
 </div>

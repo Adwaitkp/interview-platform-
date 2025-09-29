@@ -7,10 +7,10 @@ const router = express.Router();
 // Create a new question (Admin only)
 router.post('/add-question', isAdmin, async (req: Request<{}, {}, IQuestion>, res: Response) => {
   try {
-    const { skill, question, level, options, correctanswer } = req.body;
+    const { skill, question, level, type, options, correctanswer } = req.body;
 
     // Basic Validation
-    if (!skill || !question || !level || !options || !correctanswer) {
+    if (!skill || !question || !level || !type || !options || !correctanswer) {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
@@ -50,25 +50,40 @@ router.post('/add-question', isAdmin, async (req: Request<{}, {}, IQuestion>, re
 
     const trimmedCorrectAnswer = correctanswer.trim().toLowerCase();
     const validKeys = Object.keys(normalizedOptions);
-    const validValues = Object.values(normalizedOptions);
 
     let finalCorrectAnswer = '';
 
-    if (validKeys.includes(trimmedCorrectAnswer)) {
-      finalCorrectAnswer = trimmedCorrectAnswer; // already a key like 'a'
-    } else {
-      // Try to find key from value
-      const matchedEntry = Object.entries(normalizedOptions).find(
-        ([_, val]) => val === trimmedCorrectAnswer
-      );
-      if (matchedEntry) {
-        finalCorrectAnswer = matchedEntry[0]; // extract the matching key
+    if (type === 'multiple') {
+      // For multiple choice, handle comma-separated answers
+      const answerParts = trimmedCorrectAnswer.split(',').map(part => part.trim());
+      const allPartsValid = answerParts.every(part => validKeys.includes(part));
+
+      if (allPartsValid) {
+        finalCorrectAnswer = answerParts.join(',');
       } else {
         return res.status(400).json({
-          message: 'Correct answer must match one of the option values or keys (a, b, c, d)',
+          message: 'For multiple choice, correct answer must be comma-separated keys (e.g., "a,c,d")',
           providedAnswer: trimmedCorrectAnswer,
-          availableOptions: trimmedOptions
+          availableKeys: validKeys
         });
+      }
+    } else {
+      // Single choice and true/false logic (existing code)
+      if (validKeys.includes(trimmedCorrectAnswer)) {
+        finalCorrectAnswer = trimmedCorrectAnswer;
+      } else {
+        const matchedEntry = Object.entries(normalizedOptions).find(
+          ([_, val]) => val === trimmedCorrectAnswer
+        );
+        if (matchedEntry) {
+          finalCorrectAnswer = matchedEntry[0];
+        } else {
+          return res.status(400).json({
+            message: 'Correct answer must match one of the option values or keys (a, b, c, d)',
+            providedAnswer: trimmedCorrectAnswer,
+            availableOptions: trimmedOptions
+          });
+        }
       }
     }
 
@@ -76,6 +91,7 @@ router.post('/add-question', isAdmin, async (req: Request<{}, {}, IQuestion>, re
       skill,
       question,
       level: level.toLowerCase(),
+      type,
       options: trimmedOptions,
       correctanswer: finalCorrectAnswer
     });
@@ -117,7 +133,7 @@ router.delete('/delete-question/:id', isAdmin, async (req: Request, res: Respons
 router.patch('/update-question/:id', isAdmin, async (req: Request, res: Response) => {
   try {
     const questionId = req.params.id;
-    const { skill, question, level, options, correctanswer } = req.body;
+    const { skill, question, level, type, options, correctanswer } = req.body;
 
     // Validate ObjectId format
     if (!questionId.match(/^[0-9a-fA-F]{24}$/)) {
@@ -125,7 +141,7 @@ router.patch('/update-question/:id', isAdmin, async (req: Request, res: Response
     }
 
     // Validation for required fields
-    if (!skill || !question || !level || !options || !correctanswer) {
+    if (!skill || !question || !level || !type || !options || !correctanswer) {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
@@ -149,6 +165,7 @@ router.patch('/update-question/:id', isAdmin, async (req: Request, res: Response
     }
 
     // Normalize and trim all input values
+    // Normalize and trim all input values
     const trimmedCorrectAnswer = correctanswer.trim().toLowerCase();
     const trimmedOptions: Record<string, string> = {
       a: options.a.trim(),
@@ -164,28 +181,40 @@ router.patch('/update-question/:id', isAdmin, async (req: Request, res: Response
       d: trimmedOptions.d.toLowerCase()
     };
 
-    // Check if correct answer is a key or a value
     const validKeys = Object.keys(normalizedOptions);
-    const validValues = Object.values(normalizedOptions);
 
     let finalCorrectAnswer = '';
 
-    if (validKeys.includes(trimmedCorrectAnswer)) {
-      // Correct answer is already a key
-      finalCorrectAnswer = trimmedCorrectAnswer;
-    } else {
-      // Try to find which key this value belongs to
-      const matchedEntry = Object.entries(normalizedOptions).find(
-        ([_, val]) => val === trimmedCorrectAnswer
-      );
-      if (matchedEntry) {
-        finalCorrectAnswer = matchedEntry[0]; // key like 'a', 'b', etc.
+    if (type === 'multiple') {
+      // For multiple choice, handle comma-separated answers
+      const answerParts = trimmedCorrectAnswer.split(',').map((part: string) => part.trim());
+      const allPartsValid = answerParts.every((part: string) => validKeys.includes(part));
+      if (allPartsValid) {
+        finalCorrectAnswer = answerParts.join(',');
       } else {
         return res.status(400).json({
-          message: 'Correct answer must match one of the option values or keys (a, b, c, d)',
+          message: 'For multiple choice, correct answer must be comma-separated keys (e.g., "a,c,d")',
           providedAnswer: trimmedCorrectAnswer,
-          availableOptions: trimmedOptions
+          availableKeys: validKeys
         });
+      }
+    } else {
+      // Single choice and true/false logic (existing code)
+      if (validKeys.includes(trimmedCorrectAnswer)) {
+        finalCorrectAnswer = trimmedCorrectAnswer;
+      } else {
+        const matchedEntry = Object.entries(normalizedOptions).find(
+          ([_, val]) => val === trimmedCorrectAnswer
+        );
+        if (matchedEntry) {
+          finalCorrectAnswer = matchedEntry[0];
+        } else {
+          return res.status(400).json({
+            message: 'Correct answer must match one of the option values or keys (a, b, c, d)',
+            providedAnswer: trimmedCorrectAnswer,
+            availableOptions: trimmedOptions
+          });
+        }
       }
     }
 
@@ -194,6 +223,7 @@ router.patch('/update-question/:id', isAdmin, async (req: Request, res: Response
       skill,
       question,
       level: level.toLowerCase(),
+      type,
       options: trimmedOptions,
       correctanswer: finalCorrectAnswer
     };

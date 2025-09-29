@@ -16,6 +16,14 @@ export interface IUser extends Document {
   assignedSetId?: string;
   nextAttemptNumber?: number;
   userSpecificSets?: { setId: string; label: string }[];
+  questionTypeConfig?: Array<{
+    skill: string;
+    level: string;
+    multipleChoice: number;
+    trueFalse: number;
+    singleChoice: number;
+    total: number;
+  }>;
 }
 
 const userSchema = new Schema<IUser>({
@@ -41,6 +49,14 @@ const userSchema = new Schema<IUser>({
   userSpecificSets: [{ 
     setId: { type: String, required: true }, 
     label: { type: String, required: true } 
+  }],
+  questionTypeConfig: [{
+    skill: { type: String, required: true },
+    level: { type: String, required: true },
+    multipleChoice: { type: Number, default: 0 },
+    trueFalse: { type: Number, default: 0 },
+    singleChoice: { type: Number, default: 0 },
+    total: { type: Number, required: true }
   }],
 }, 
   { timestamps: true } 

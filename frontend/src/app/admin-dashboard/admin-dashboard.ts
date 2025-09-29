@@ -65,7 +65,7 @@ export class AdminDashboardComponent implements OnInit {
     const pages: number[] = [];
     const start = Math.max(1, this.currentPage - 1);
     const end = Math.min(this.totalPages - 1, this.currentPage + 2);
-    
+
     for (let i = start; i < end; i++) {
       if (i !== 0 && i !== this.totalPages - 1) {
         pages.push(i);
@@ -394,4 +394,30 @@ export class AdminDashboardComponent implements OnInit {
     }
     return this.sortDirection === 'asc' ? '↑' : '↓';
   }
+  isCorrectOption(question: any, option: string): boolean {
+  if (!question?.correctanswer) return false;
+  
+  const correctAnswer = question.correctanswer.toString();
+  
+  if (correctAnswer.includes(',')) {
+    const correctAnswers = correctAnswer.split(',').map((ans: string) => ans.trim().toLowerCase());
+    return correctAnswers.includes(option.toLowerCase());
+  }
+  
+  return correctAnswer.toLowerCase() === option.toLowerCase();
+}
+
+isUserSelectedOption(question: any, option: string): boolean {
+  if (!question?.userAnswer) return false;
+  
+  const userAnswer = question.userAnswer.toString();
+  
+  if (userAnswer.includes(',')) {
+    const userAnswers = userAnswer.split(',').map((ans: string) => ans.trim().toLowerCase());
+    return userAnswers.includes(option.toLowerCase());
+  }
+  
+  return userAnswer.toLowerCase() === option.toLowerCase();
+}
+
 }

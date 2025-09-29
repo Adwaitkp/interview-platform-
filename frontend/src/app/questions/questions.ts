@@ -10,6 +10,7 @@ export interface Question {
   skill: string;
   level: string;
   question: string;
+  type: 'single' | 'multiple' | 'truefalse';
   options: { a: string; b: string; c: string; d: string };
   correctanswer: string;
   accepted?: boolean;
@@ -38,12 +39,18 @@ export class QuestionsComponent implements OnInit {
   skills: string[] = ['Node.js', 'React', 'Angular', 'MongoDB', 'PostgreSQL', 'Next.js', 'Django', 'Git', 'Docker', 'TypeScript'];
 
   levels = ['beginner', 'intermediate', 'advanced'];
+  types = [
+    { value: 'single', label: 'Single Choice' },
+    { value: 'multiple', label: 'Multiple Choice' },
+    { value: 'truefalse', label: 'True/False' }
+  ];
   predefinedSkills: string[] = ['Node.js', 'React', 'Angular', 'MongoDB', 'PostgreSQL', 'Next.js', 'Django', 'Git', 'Docker', 'TypeScript'];
 
   form: Omit<Question, '_id'> & { _id?: string } = {
     skill: '',
     level: '',
     question: '',
+    type: 'single',
     options: { a: '', b: '', c: '', d: '' },
     correctanswer: ''
   };
@@ -117,22 +124,21 @@ export class QuestionsComponent implements OnInit {
 
 
   changePage(page: number): void {
-    if (page !== this.currentPage) {
+    if (page >= 0 && page < this.totalPages && page !== this.currentPage) {
       this.currentPage = page;
       this.loadQuestions();
     }
   }
 
   getVisiblePages(): number[] {
-    const totalPages = this.totalPages;
-    const current = this.currentPage;
     const pages: number[] = [];
+    const start = Math.max(1, this.currentPage - 1);
+    const end = Math.min(this.totalPages - 2, this.currentPage + 1);
 
-    if (totalPages <= 1) return pages;
-
-    // Show pages around current page (excluding first and last which are handled separately)
-    for (let i = Math.max(1, current - 1); i <= Math.min(totalPages - 2, current + 1); i++) {
-      pages.push(i);  // <-- Remove the if condition, just push all calculated pages
+    for (let i = start; i <= end; i++) {
+      if (i > 0 && i < this.totalPages - 1) {
+        pages.push(i);
+      }
     }
 
     return pages;
@@ -166,6 +172,7 @@ export class QuestionsComponent implements OnInit {
       skill: '',
       level: '',
       question: '',
+      type: 'single',
       options: { a: '', b: '', c: '', d: '' },
       correctanswer: ''
     };
@@ -179,6 +186,7 @@ export class QuestionsComponent implements OnInit {
       skill: question.skill,
       level: question.level,
       question: question.question,
+      type: question.type,
       options: { ...question.options },
       correctanswer: question.correctanswer
     };
@@ -236,28 +244,48 @@ export class QuestionsComponent implements OnInit {
     }
 
     // Accept both a/b/c/d or actual content as valid correct answers
+    // Handle multiple correct answers for multiple choice questions
     const answer = trimLower(this.form.correctanswer);
     const keyToValue = this.form.options;
     const optionsNormalized = Object.values(keyToValue).map(trimLower);
-    const isAnswerValid =
-      ['a', 'b', 'c', 'd'].includes(answer) ||
-      optionsNormalized.includes(answer);
+
+    let isAnswerValid = false;
+
+    if (this.form.type === 'multiple') {
+      // For multiple choice, allow comma-separated answers like "b,c" or "c,d"
+      const answerParts = answer.split(',').map(part => part.trim());
+      isAnswerValid = answerParts.every(part =>
+        ['a', 'b', 'c', 'd'].includes(part) || optionsNormalized.includes(part)
+      );
+    } else {
+      // For single choice and true/false
+      isAnswerValid = ['a', 'b', 'c', 'd'].includes(answer) || optionsNormalized.includes(answer);
+    }
 
     if (!isAnswerValid) {
-      alert('Correct answer must match one of the options (a/b/c/d or full content).');
+      alert('Correct answer must match one of the options (a/b/c/d or full content). For multiple choice, use comma-separated values like "b,c".');
       return;
     }
 
     // If answer is a/b/c/d convert it to actual option value before sending
-    const finalCorrectAnswer =
-      ['a', 'b', 'c', 'd'].includes(answer)
-        ? keyToValue[answer as 'a' | 'b' | 'c' | 'd']
-        : this.form.correctanswer;
+   // Handle conversion for multiple choice questions
+let finalCorrectAnswer = this.form.correctanswer;
+
+if (this.form.type === 'multiple') {
+  // For multiple choice, keep the comma-separated format (e.g., "b,c")
+  finalCorrectAnswer = answer;
+} else {
+  // For single choice and true/false, convert if needed
+  finalCorrectAnswer = ['a', 'b', 'c', 'd'].includes(answer)
+    ? keyToValue[answer as 'a' | 'b' | 'c' | 'd']
+    : this.form.correctanswer;
+}
 
     const payload: Omit<Question, '_id'> = {
       skill: this.form.skill,
       level: this.form.level,
       question: this.form.question,
+      type: this.form.type,
       options: { ...this.form.options },
       correctanswer: finalCorrectAnswer
     };
