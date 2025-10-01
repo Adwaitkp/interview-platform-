@@ -90,6 +90,11 @@ export class UnifiedQuestionsComponent implements OnInit {
   constructor(private http: HttpClient, private router: Router) { }
 
   ngOnInit(): void {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      this.router.navigate(['/login']);
+      return;
+    }
     this.loadAllData();
   }
 

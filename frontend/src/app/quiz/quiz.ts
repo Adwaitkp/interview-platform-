@@ -49,6 +49,12 @@ export class QuizComponent implements OnInit, OnDestroy {
 
   constructor(private http: HttpClient, private cdr: ChangeDetectorRef) { }
 
+  // Helper method to get user-specific localStorage key
+  private getUserKey(key: string): string {
+    const userId = localStorage.getItem('intervieweeId') || 'guest';
+    return `quiz_${userId}_${key}`;
+  }
+
   ngOnInit(): void {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -80,12 +86,12 @@ export class QuizComponent implements OnInit, OnDestroy {
   }
 
   private restoreQuizState() {
-    const savedTimers = localStorage.getItem('questionTimers');
-    const savedIndex = localStorage.getItem('currentQuestionIndex');
-    const savedLocked = localStorage.getItem('lockedQuestions');
-    const savedUserAnswers = localStorage.getItem('userAnswers');
-    const savedTestStarted = localStorage.getItem('testStarted');
-    const savedQuizCompleted = localStorage.getItem('quizCompleted');
+    const savedTimers = localStorage.getItem(this.getUserKey('questionTimers'));
+    const savedIndex = localStorage.getItem(this.getUserKey('currentQuestionIndex'));
+    const savedLocked = localStorage.getItem(this.getUserKey('lockedQuestions'));
+    const savedUserAnswers = localStorage.getItem(this.getUserKey('userAnswers'));
+    const savedTestStarted = localStorage.getItem(this.getUserKey('testStarted'));
+    const savedQuizCompleted = localStorage.getItem(this.getUserKey('quizCompleted'));
 
     if (savedTimers) {
       try { this.questionTimers = JSON.parse(savedTimers); } catch { this.questionTimers = {}; }
@@ -179,7 +185,7 @@ export class QuizComponent implements OnInit, OnDestroy {
     if (this.quizCompleted) return;
 
     this.initTimers();
-    const savedIndex = localStorage.getItem('currentQuestionIndex');
+    const savedIndex = localStorage.getItem(this.getUserKey('currentQuestionIndex'));
     let index = 0;
     if (savedIndex && !isNaN(Number(savedIndex))) {
       const num = Number(savedIndex);
@@ -205,14 +211,39 @@ export class QuizComponent implements OnInit, OnDestroy {
   // UPDATED: Support for multiple answer types
   private updateSelectedAnswerForCurrentQuestion() {
     if (this.currentQuestion && this.userAnswers[this.currentQuestion._id]) {
-      const userAnswer = this.userAnswers[this.currentQuestion._id];
-      
-      // Check if it's a multiple choice question
+      let userAnswer = this.userAnswers[this.currentQuestion._id];
+
+      // MIGRATION: Previously answers were stored as shuffled display letters (A,B,C,D).
+      // Now we store stable original option keys (a,b,c,d,true,false). If we detect old style,
+      // convert it using the saved shuffle mapping.
+      const mapping = this.shuffledOptions[this.currentQuestion._id] || [];
+      const isOldSingle = /^[A-Z]$/.test(userAnswer) && this.currentQuestion.type !== 'multiple';
+      if (isOldSingle) {
+        const found = mapping.find(o => o.key === userAnswer);
+        if (found) {
+          userAnswer = found.originalKey; // convert to original
+          this.userAnswers[this.currentQuestion._id] = userAnswer; // persist migration
+          localStorage.setItem(this.getUserKey('userAnswers'), JSON.stringify(this.userAnswers));
+        }
+      }
+
       if (this.currentQuestion.type === 'multiple') {
-        this.selectedAnswers = userAnswer.split(',').filter(ans => ans.trim());
+        let parts = userAnswer.split(',').filter(ans => ans.trim());
+        const looksOldMultiple = parts.length > 0 && parts.every(p => /^[A-Z]$/.test(p));
+        if (looksOldMultiple) {
+          parts = parts.map(p => {
+            const found = mapping.find(o => o.key === p);
+            return found ? found.originalKey : p;
+          });
+          userAnswer = parts.join(',');
+          this.userAnswers[this.currentQuestion._id] = userAnswer;
+          localStorage.setItem(this.getUserKey('userAnswers'), JSON.stringify(this.userAnswers));
+        }
+        this.selectedAnswers = userAnswer.split(',').filter(ans => ans.trim()); // store original keys
         this.selectedAnswer = '';
       } else {
-        this.selectedAnswer = userAnswer;
+        // single / truefalse
+        this.selectedAnswer = userAnswer; // original key
         this.selectedAnswers = [];
       }
     } else {
@@ -273,60 +304,64 @@ export class QuizComponent implements OnInit, OnDestroy {
 
   // UPDATED: Handle single answer selection
  onAnswerSelect(option: string): void {
-  this.selectedAnswer = option;
-  if (this.currentQuestion && this.currentQuestion._id) {
-    this.userAnswers[this.currentQuestion._id] = option;
-    this.saveQuizState();
+    // option now is the ORIGINAL key (a,b,c,d,true,false)
+    this.selectedAnswer = option;
+    if (this.currentQuestion && this.currentQuestion._id) {
+      this.userAnswers[this.currentQuestion._id] = option; // store stable original key
+      this.saveQuizState();
+    }
+    this.cdr.detectChanges();
   }
-  this.cdr.detectChanges();
-}
 
 
   // NEW: Handle multiple answer selection
   onMultipleAnswerChange(event: any, optionKey: string): void {
-  if (event.target.checked) {
-    if (!this.selectedAnswers.includes(optionKey)) {
-      this.selectedAnswers.push(optionKey);
+    // optionKey is ORIGINAL key for multiple answers
+    if (event.target.checked) {
+      if (!this.selectedAnswers.includes(optionKey)) {
+        this.selectedAnswers.push(optionKey);
+      }
+    } else {
+      this.selectedAnswers = this.selectedAnswers.filter(opt => opt !== optionKey);
     }
-  } else {
-    this.selectedAnswers = this.selectedAnswers.filter(opt => opt !== optionKey);
+
+    if (this.currentQuestion && this.currentQuestion._id) {
+      this.userAnswers[this.currentQuestion._id] = this.selectedAnswers.join(','); // store original keys
+      this.saveQuizState();
+    }
+    this.cdr.detectChanges();
   }
-  
-  if (this.currentQuestion && this.currentQuestion._id) {
-    this.userAnswers[this.currentQuestion._id] = this.selectedAnswers.join(',');
-    this.saveQuizState();
-  }
-  this.cdr.detectChanges();
-}
 
 
   // NEW: Check if option is selected (for styling)
   isOptionSelected(optionKey: string): boolean {
+    // Backwards compatibility: template now passes ORIGINAL keys via updated code.
     if (!this.currentQuestion) return false;
     if (this.currentQuestion.type === 'multiple') {
-      return this.selectedAnswers.includes(optionKey);
+      return this.selectedAnswers.includes(optionKey); // original keys list
     }
-    return this.selectedAnswer === optionKey;
+    return this.selectedAnswer === optionKey; // original key
   }
 
   // NEW: Handle option click for both single and multiple
   onOptionClick(optionKey: string): void {
-  if (!this.currentQuestion || !this.currentQuestion._id) return;
-  
-  if (this.currentQuestion.type === 'multiple') {
-    const index = this.selectedAnswers.indexOf(optionKey);
-    if (index >= 0) {
-      this.selectedAnswers.splice(index, 1);
+    // This method now expects ORIGINAL optionKey.
+    if (!this.currentQuestion || !this.currentQuestion._id) return;
+
+    if (this.currentQuestion.type === 'multiple') {
+      const index = this.selectedAnswers.indexOf(optionKey);
+      if (index >= 0) {
+        this.selectedAnswers.splice(index, 1);
+      } else {
+        this.selectedAnswers.push(optionKey);
+      }
+      this.userAnswers[this.currentQuestion._id] = this.selectedAnswers.join(',');
     } else {
-      this.selectedAnswers.push(optionKey);
+      this.selectedAnswer = optionKey;
+      this.userAnswers[this.currentQuestion._id] = optionKey;
     }
-    this.userAnswers[this.currentQuestion._id] = this.selectedAnswers.join(',');
-  } else {
-    this.selectedAnswer = optionKey;
-    this.userAnswers[this.currentQuestion._id] = optionKey;
+    this.saveQuizState();
   }
-  this.saveQuizState();
-}
 
 
   startQuiz() {
@@ -353,7 +388,7 @@ export class QuizComponent implements OnInit, OnDestroy {
 
   private clearQuizStorage() {
     const keys = ['questionTimers', 'currentQuestionIndex', 'lockedQuestions', 'userAnswers', 'testStarted'];
-    keys.forEach(key => localStorage.removeItem(key));
+    keys.forEach(key => localStorage.removeItem(this.getUserKey(key)));
   }
 
   initTimers() {
@@ -444,8 +479,10 @@ export class QuizComponent implements OnInit, OnDestroy {
       quizCompleted: this.quizCompleted.toString()
     };
 
+    // All userAnswers MUST be stored with original option keys, never display letters.
+
     Object.entries(state).forEach(([key, value]) => {
-      localStorage.setItem(key, value);
+      localStorage.setItem(this.getUserKey(key), value);
     });
   }
 
@@ -466,22 +503,8 @@ export class QuizComponent implements OnInit, OnDestroy {
 
     this.isSubmitting = true;
     const questionResponses = this.questions.map(q => {
-      const shuffledOptions = this.shuffledOptions[q._id] || [];
-      const userAnswerRaw = this.userAnswers[q._id] || '';
-      
-      // Handle multiple answers
-      let originalAnswer = '';
-      if (q.type === 'multiple') {
-        const userAnswers = userAnswerRaw.split(',');
-        const originalAnswers = userAnswers.map(ans => {
-          const selectedOption = shuffledOptions.find(opt => opt.key === ans);
-          return selectedOption ? selectedOption.originalKey : ans;
-        });
-        originalAnswer = originalAnswers.join(',');
-      } else {
-        const selectedOption = shuffledOptions.find(opt => opt.key === userAnswerRaw);
-        originalAnswer = selectedOption ? selectedOption.originalKey : userAnswerRaw;
-      }
+      // userAnswers now already store original stable keys (a,b,c,d,true,false) or comma separated list.
+      const originalAnswer = this.userAnswers[q._id] || '';
 
       return {
         questionId: q._id,
@@ -502,7 +525,7 @@ export class QuizComponent implements OnInit, OnDestroy {
       next: () => {
         this.quizCompleted = true;
         this.testStarted = false;
-        localStorage.setItem('quizCompleted', 'true');
+        localStorage.setItem(this.getUserKey('quizCompleted'), 'true');
         this.isSubmitting = false;
       },
       error: (err) => {
@@ -541,52 +564,94 @@ export class QuizComponent implements OnInit, OnDestroy {
   }
 
   // UPDATED: Support for true/false questions
-  getOptions(q?: any): Array<{ key: string; value: string; originalKey: string }> {
-  const qq = q || this.currentQuestion;
-  if (!qq) return [];
+  getOptions(q?: any): Array<{ key: string; value: string; originalKey: string; displayKey: string }> {
+    const qq = q || this.currentQuestion;
+    if (!qq) return [];
 
-  // Handle true/false questions (type 'truefalse')
-  if (qq.type === 'truefalse') {
-    return [
-      { key: 'A', value: 'True', originalKey: 'true' },
-      { key: 'B', value: 'False', originalKey: 'false' }
-    ];
-  }
+    // True/False fixed order (no shuffle needed)
+    if (qq.type === 'truefalse') {
+      return [
+        { key: 'true', value: 'True', originalKey: 'true', displayKey: 'A' },
+        { key: 'false', value: 'False', originalKey: 'false', displayKey: 'B' }
+      ];
+    }
 
-  if (this.shuffledOptions[qq._id]) {
-    return this.shuffledOptions[qq._id];
-  }
-
-  const originalOptions: Array<{ key: string; value: string; originalKey: string }> = [];
-  if (qq.options) {
-    Object.entries(qq.options).forEach(([key, value]) => {
-      originalOptions.push({
-        key: key.toUpperCase(),
-        value: String(value),
-        originalKey: key.toLowerCase()
+    const originalOptions: Array<{ originalKey: string; value: string }> = [];
+    if (qq.options) {
+      Object.entries(qq.options).forEach(([key, value]) => {
+        originalOptions.push({
+          originalKey: key.toLowerCase(),
+          value: String(value)
+        });
       });
-    });
+    }
+    // If we already generated mapping earlier (old shape), adapt it (backward compatibility)
+    if (this.shuffledOptions[qq._id]) {
+      const existing = this.shuffledOptions[qq._id];
+      if (Array.isArray(existing) && existing.length === originalOptions.length) {
+        return existing.map((o: any, idx: number) => ({
+          key: o.originalKey || o.key?.toLowerCase(),
+            value: o.value,
+            originalKey: o.originalKey || o.key?.toLowerCase(),
+            displayKey: String.fromCharCode(65 + idx)
+        }));
+      }
+    }
+
+    // Deterministic seeded shuffle so order stays same every session (userId + questionId)
+    const userId = (localStorage.getItem('intervieweeId') || 'guest').toString();
+    const seed = `${userId}_${qq._id}`;
+    const shuffled = this.deterministicShuffle([...originalOptions], seed);
+
+    const mapped = shuffled.map((option, index) => ({
+        key: option.originalKey,
+        value: option.value,
+        originalKey: option.originalKey,
+        displayKey: String.fromCharCode(65 + index)
+    }));
+
+    // Store mapping (displayKey + originalKey + value) so migration code still works
+    this.shuffledOptions[qq._id] = mapped.map(o => ({
+      key: o.displayKey,
+      value: o.value,
+      originalKey: o.originalKey
+    }));
+    this.saveShuffledOptions();
+    return mapped;
   }
 
-  const shuffled = [...originalOptions];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  // --- Deterministic shuffle helpers ---
+  private hashString(str: string): number {
+    // Simple 32-bit FNV-1a hash
+    let h = 0x811c9dc5;
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = (h + (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24)) >>> 0;
+    }
+    return h >>> 0;
   }
 
-  const shuffledWithNewKeys = shuffled.map((option, index) => ({
-    key: String.fromCharCode(65 + index), // A, B, C, D
-    value: option.value,
-    originalKey: option.originalKey
-  }));
+  private rng(seed: number): () => number {
+    // Mulberry32
+    return function () {
+      seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+      let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
 
-  this.shuffledOptions[qq._id] = shuffledWithNewKeys;
-  this.saveShuffledOptions();
-  return shuffledWithNewKeys;
-}
+  private deterministicShuffle<T>(arr: T[], seedStr: string): T[] {
+    const rand = this.rng(this.hashString(seedStr));
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
 
   trackByOptionKey(index: number, option: any): string {
-    return option.key || index;
+    return option.originalKey || option.key || index;
   }
 
   get formattedTimer(): string {

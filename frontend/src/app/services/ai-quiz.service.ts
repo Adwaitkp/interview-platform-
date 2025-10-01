@@ -81,27 +81,32 @@ export class AIQuizService {
   }
 
   // LocalStorage State Management
+  private getUserKey(key: string): string {
+    const userId = this.getUserIdFromToken() || 'guest';
+    return `aiQuiz_${userId}_${key}`;
+  }
+
   saveQuizState(state: Partial<QuizState>): void {
     const stateToSave = {
-      aiQuestionTimers: JSON.stringify(state.questionTimers || {}),
-      aiCurrentQuestionIndex: (state.currentQuestionIndex || 0).toString(),
-      aiLockedQuestions: JSON.stringify(state.lockedQuestions || {}),
-      aiUserAnswers: JSON.stringify(state.userAnswers || {}),
-      aiTestStarted: (state.testStarted || false).toString(),
-      aiQuizCompleted: (state.quizCompleted || false).toString()
+      questionTimers: JSON.stringify(state.questionTimers || {}),
+      currentQuestionIndex: (state.currentQuestionIndex || 0).toString(),
+      lockedQuestions: JSON.stringify(state.lockedQuestions || {}),
+      userAnswers: JSON.stringify(state.userAnswers || {}),
+      testStarted: (state.testStarted || false).toString(),
+      quizCompleted: (state.quizCompleted || false).toString()
     };
     Object.entries(stateToSave).forEach(([key, value]) => {
-      localStorage.setItem(key, value);
+      localStorage.setItem(this.getUserKey(key), value);
     });
   }
 
   restoreQuizState(): QuizState {
-    const savedTimers = localStorage.getItem('aiQuestionTimers');
-    const savedIndex = localStorage.getItem('aiCurrentQuestionIndex');
-    const savedLocked = localStorage.getItem('aiLockedQuestions');
-    const savedUserAnswers = localStorage.getItem('aiUserAnswers');
-    const savedTestStarted = localStorage.getItem('aiTestStarted');
-    const savedQuizCompleted = localStorage.getItem('aiQuizCompleted');
+    const savedTimers = localStorage.getItem(this.getUserKey('questionTimers'));
+    const savedIndex = localStorage.getItem(this.getUserKey('currentQuestionIndex'));
+    const savedLocked = localStorage.getItem(this.getUserKey('lockedQuestions'));
+    const savedUserAnswers = localStorage.getItem(this.getUserKey('userAnswers'));
+    const savedTestStarted = localStorage.getItem(this.getUserKey('testStarted'));
+    const savedQuizCompleted = localStorage.getItem(this.getUserKey('quizCompleted'));
 
     const state: QuizState = {
       questionTimers: savedTimers ? JSON.parse(savedTimers) : {},
@@ -115,7 +120,7 @@ export class AIQuizService {
   }
 
   clearQuizStorage(): void {
-    const keys = ['aiQuestionTimers', 'aiCurrentQuestionIndex', 'aiLockedQuestions', 'aiUserAnswers', 'aiTestStarted', 'aiQuizCompleted'];
-    keys.forEach(key => localStorage.removeItem(key));
+    const keys = ['questionTimers', 'currentQuestionIndex', 'lockedQuestions', 'userAnswers', 'testStarted', 'quizCompleted'];
+    keys.forEach(key => localStorage.removeItem(this.getUserKey(key)));
   }
 }

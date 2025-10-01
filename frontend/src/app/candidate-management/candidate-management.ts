@@ -1,4 +1,5 @@
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AddIntervieweeComponent } from '../add-interviewee/add-interviewee';
@@ -68,9 +69,14 @@ export class CandidateManagement implements OnInit {
   sortField: string = '';
   sortDirection: 'asc' | 'desc' = 'asc';
 
-  constructor(private candidateService: CandidateManagementService, private cdr: ChangeDetectorRef) { }
+  constructor(private candidateService: CandidateManagementService, private cdr: ChangeDetectorRef, private router: Router) { }
 
   ngOnInit(): void {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      this.router.navigate(['/login']);
+      return;
+    }
     this.getAllUsers();
   }
 
@@ -91,22 +97,37 @@ export class CandidateManagement implements OnInit {
       return;
     }
 
+    // Detect removed skills
+    const originalSkills = Array.isArray(originalUser.skill) ? originalUser.skill : [];
+    const removedSkills = originalSkills.filter((skill: string) => !newSkills.includes(skill));
+
+    // Detect removed levels
     const originalLevels = Array.isArray(originalUser.level) ? originalUser.level : [originalUser.level];
     const newLevels = this.editForms[userId]?.level || [];
     const removedLevels = originalLevels
       .filter((level: string) => !newLevels.includes(level))
       .flatMap((level: string) => newSkills.map((skill: string) => ({ skill, level })));
 
-    if (removedLevels.length > 0) {
+    // Check if we need to do a cascade update
+    if (removedSkills.length > 0 || removedLevels.length > 0) {
       const updatedQuestionCounts = { ...originalUser.questionCounts };
+      
+      // Clear question counts for removed levels
       removedLevels.forEach(({ skill, level }: { skill: string; level: string }) => {
         if (updatedQuestionCounts[skill]) {
           updatedQuestionCounts[skill][level] = 0;
         }
       });
 
+      // Clear question counts for removed skills entirely
+      removedSkills.forEach((skill: string) => {
+        if (updatedQuestionCounts[skill]) {
+          delete updatedQuestionCounts[skill];
+        }
+      });
+
       const payload = {
-        removedSkills: [],
+        removedSkills,
         removedLevels,
         ...this.editForms[userId],
         questionCounts: updatedQuestionCounts
@@ -325,12 +346,28 @@ export class CandidateManagement implements OnInit {
 
     if (removedSkills.length > 0 || removedLevels.length > 0) {
       this.candidateService.cascadeUpdateUser(this.selectedUser._id, { removedSkills, removedLevels, questionCounts: this.questionCountsEdit }).subscribe({
-        next: () => { this.closeQuestionDetails(); this.getAllUsers(); },
+        next: () => { 
+          // Update local user's question counts immediately before closing
+          const userIndex = this.users.findIndex(u => u._id === this.selectedUser?._id);
+          if (userIndex !== -1) {
+            this.users[userIndex].questionCounts = { ...this.questionCountsEdit };
+          }
+          this.closeQuestionDetails(); 
+          this.getAllUsers(); 
+        },
         error: (err) => console.error('Failed to perform cascading delete:', err)
       });
     } else {
       this.candidateService.updateUser(this.selectedUser._id, { questionCounts: this.questionCountsEdit }).subscribe({
-        next: () => { this.closeQuestionDetails(); this.getAllUsers(); },
+        next: () => { 
+          // Update local user's question counts immediately before closing
+          const userIndex = this.users.findIndex(u => u._id === this.selectedUser?._id);
+          if (userIndex !== -1) {
+            this.users[userIndex].questionCounts = { ...this.questionCountsEdit };
+          }
+          this.closeQuestionDetails(); 
+          this.getAllUsers(); 
+        },
         error: (err) => console.error('Failed to update question counts', err)
       });
     }
@@ -643,32 +680,53 @@ export class CandidateManagement implements OnInit {
     // Create skill-level combinations
     this.skillLevelQuestionTypes = [];
 
-    if (user.questionCounts) {
-      Object.keys(user.questionCounts).forEach(skill => {
-        if (user.questionCounts && user.questionCounts[skill]) {
-          Object.keys(user.questionCounts[skill]).forEach(level => {
-            if (user.questionCounts && user.questionCounts[skill]) {
-              const total = user.questionCounts[skill][level];
-              if (total > 0) {
-                // Check if user has existing question type configuration
-                const existingConfig = user.questionTypeConfig?.find((config: any) =>
-                  config.skill === skill && config.level === level
-                );
+    // Get current skills and levels (either from edit form if in edit mode, or from user data)
+    let currentSkills: string[] = [];
+    let currentLevels: string[] = [];
 
-                this.skillLevelQuestionTypes.push({
-                  skill: skill,
-                  level: level,
-                  multipleChoice: existingConfig?.multipleChoice || 0,
-                  trueFalse: existingConfig?.trueFalse || 0,
-                  singleChoice: existingConfig?.singleChoice || total,
-                  total: total
-                });
-              }
-            }
+    if (this.editUserId === user._id && this.editForms[user._id]) {
+      // User is in edit mode, use the current edit form data
+      currentSkills = this.editForms[user._id].skill || [];
+      currentLevels = this.editForms[user._id].level || [];
+    } else {
+      // User is not in edit mode, use saved data
+      currentSkills = Array.isArray(user.skill) ? user.skill : [];
+      currentLevels = Array.isArray(user.level) ? user.level : (user.level ? [user.level] : []);
+    }
+
+    // Create combinations for all current skill-level pairs
+    currentSkills.forEach(skill => {
+      currentLevels.forEach(level => {
+        // Get the question count - use most up-to-date value from user's questionCounts
+        const savedCount = user.questionCounts?.[skill]?.[level] || 0;
+        
+        // Check if user has existing question type configuration
+        const existingConfig = user.questionTypeConfig?.find((config: any) =>
+          config.skill === skill && config.level === level
+        );
+
+        // If savedCount is 0, default all question types to 0
+        if (savedCount === 0) {
+          this.skillLevelQuestionTypes.push({
+            skill: skill,
+            level: level,
+            multipleChoice: 0,
+            trueFalse: 0,
+            singleChoice: 0,
+            total: 0
+          });
+        } else {
+          this.skillLevelQuestionTypes.push({
+            skill: skill,
+            level: level,
+            multipleChoice: existingConfig?.multipleChoice || 0,
+            trueFalse: existingConfig?.trueFalse || 0,
+            singleChoice: existingConfig?.singleChoice || savedCount,
+            total: savedCount
           });
         }
       });
-    }
+    });
 
     this.showNormalQuizModal = true;
   }

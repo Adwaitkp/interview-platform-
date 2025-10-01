@@ -111,43 +111,38 @@ private applyDarkMode(): void {
       default:
         break;
     }
-    // this.profileOpen = false;
-    // Don't close sidebar when navigating - keep it in current state
+    
   }
 
   logout(): void {
-    // Preserve quiz state during logout
-    const quizStateKeys = [
-      // Normal quiz keys
-      'questionTimers',
-      'currentQuestionIndex',
-      'lockedQuestions',
-      'selectedOptions',
-      'userAnswers', // <-- added for answer persistence
-      'testStarted',
-      'quizCompleted',
-      'allQuestions',
-      // AI quiz keys
-      'aiQuestionTimers',
-      'aiCurrentQuestionIndex',
-      'aiLockedQuestions',
-      'aiSelectedOptions',
-      'aiTestStarted',
-      'aiQuizCompleted',
-      // Common keys
-      'skill',
-      'level',
-      'questionCounts'
+    // Preserve ALL quiz data for ALL users (not just current user)
+    const preservedState: { [key: string]: string | null } = {};
+
+    // Preserve all user-specific quiz keys for ALL users
+    const allQuizPrefixes = [
+      'quiz_',           
+      'aiQuiz_',         
+      'aiQuestionOrder_',
+      'aiShuffledOptions_',
+      'shuffledOptions_'
     ];
 
-    const preservedState: { [key: string]: string | null } = {};
-    quizStateKeys.forEach(key => {
-      preservedState[key] = localStorage.getItem(key);
-    });
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key) {
+        const isQuizData = allQuizPrefixes.some(prefix => key.startsWith(prefix));
+        const isCommonData = ['skill', 'level', 'questionCounts'].includes(key);
+        
+        if (isQuizData || isCommonData) {
+          const val = localStorage.getItem(key);
+          if (val !== null) preservedState[key] = val;
+        }
+      }
+    }
 
     localStorage.clear();
 
-    // Restore quiz state
+    // Restore ALL quiz data for ALL users
     Object.entries(preservedState).forEach(([key, value]) => {
       if (value !== null) {
         localStorage.setItem(key, value);

@@ -55,31 +55,31 @@
       <div *ngIf="currentQuestion"
         class="mb-8 p-6 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800">
         <!-- Question Info -->
-        <div class="mb-4 text-sm text-gray-600 dark:text-gray-400">
+        <!-- <div class="mb-4 text-sm text-gray-600 dark:text-gray-400">
           <span class="bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200 px-2 py-1 rounded mr-2">{{
             currentQuestion.skill }}</span>
           <span class="bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-200 px-2 py-1 rounded">{{
             currentQuestion.level }}</span>
-        </div>
+        </div> -->
 
         <h3 class="text-lg font-medium text-gray-900 mb-4 dark:text-gray-100">{{ currentQuestionIndex + 1 }}. {{
           currentQuestion.question }}</h3>
         <div class="space-y-3">
           <label *ngFor="let option of getOptions(currentQuestion); trackBy: trackByOptionKey"
             class="flex items-center p-3 border border-gray-200 dark:border-gray-600 dark:text-gray-200 rounded-md transition duration-200"
-            [class.bg-blue-50]="selectedAnswer === option.key && !lockedQuestions[currentQuestion._id] && questionTimers[currentQuestion._id] > 0"
-            [class.dark:bg-blue-900]="selectedAnswer === option.key && !lockedQuestions[currentQuestion._id] && questionTimers[currentQuestion._id] > 0"
-            [class.border-blue-500]="selectedAnswer === option.key && !lockedQuestions[currentQuestion._id] && questionTimers[currentQuestion._id] > 0"
-            [class.dark:border-blue-400]="selectedAnswer === option.key && !lockedQuestions[currentQuestion._id] && questionTimers[currentQuestion._id] > 0"
+            [class.bg-blue-50]="selectedAnswer === (option.originalKey || option.key) && !lockedQuestions[currentQuestion._id] && questionTimers[currentQuestion._id] > 0"
+            [class.dark:bg-blue-900]="selectedAnswer === (option.originalKey || option.key) && !lockedQuestions[currentQuestion._id] && questionTimers[currentQuestion._id] > 0"
+            [class.border-blue-500]="selectedAnswer === (option.originalKey || option.key) && !lockedQuestions[currentQuestion._id] && questionTimers[currentQuestion._id] > 0"
+            [class.dark:border-blue-400]="selectedAnswer === (option.originalKey || option.key) && !lockedQuestions[currentQuestion._id] && questionTimers[currentQuestion._id] > 0"
             [class.cursor-pointer]="!lockedQuestions[currentQuestion._id] && questionTimers[currentQuestion._id] > 0"
             [class.cursor-not-allowed]="lockedQuestions[currentQuestion._id] || questionTimers[currentQuestion._id] <= 0"
             [class.opacity-60]="lockedQuestions[currentQuestion._id] || questionTimers[currentQuestion._id] <= 0"
             [class.hover:bg-gray-50]="!lockedQuestions[currentQuestion._id] && questionTimers[currentQuestion._id] > 0"
             [class.dark:hover:bg-gray-700]="!lockedQuestions[currentQuestion._id] && questionTimers[currentQuestion._id] > 0"
-            (click)="!lockedQuestions[currentQuestion._id] && questionTimers[currentQuestion._id] > 0 ? onAnswerSelect(option.key) : null">
-            <input type="radio" [name]="'question_' + currentQuestion._id" [value]="option.key"
+            (click)="!lockedQuestions[currentQuestion._id] && questionTimers[currentQuestion._id] > 0 ? onAnswerSelect(option.originalKey || option.key) : null">
+            <input type="radio" [name]="'question_' + currentQuestion._id" [value]="option.originalKey || option.key"
               [(ngModel)]="selectedAnswer"
-              (change)="!lockedQuestions[currentQuestion._id] && questionTimers[currentQuestion._id] > 0 ? onAnswerSelect(option.key) : null"
+              (change)="!lockedQuestions[currentQuestion._id] && questionTimers[currentQuestion._id] > 0 ? onAnswerSelect(option.originalKey || option.key) : null"
               [disabled]="lockedQuestions[currentQuestion._id] || questionTimers[currentQuestion._id] <= 0"
               [class.cursor-pointer]="!lockedQuestions[currentQuestion._id] && questionTimers[currentQuestion._id] > 0"
               [class.cursor-not-allowed]="lockedQuestions[currentQuestion._id] || questionTimers[currentQuestion._id] <= 0"
@@ -87,7 +87,7 @@
             <span class="ml-3 text-gray-700 dark:text-gray-200"
               [class.cursor-pointer]="!lockedQuestions[currentQuestion._id] && questionTimers[currentQuestion._id] > 0"
               [class.cursor-not-allowed]="lockedQuestions[currentQuestion._id] || questionTimers[currentQuestion._id] <= 0">
-              {{ option.key }}. {{ option.value }}
+              {{ (option.displayKey || option.key) }}. {{ option.value }}
             </span>
           </label>
 

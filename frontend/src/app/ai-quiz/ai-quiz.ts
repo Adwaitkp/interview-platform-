@@ -11,6 +11,9 @@ import { AIQuizService, AIQuestion, QuizState } from '../services/ai-quiz.servic
 })
 export class AIQuizComponent implements OnInit, OnDestroy {
   questions: AIQuestion[] = [];
+  // Persisted deterministic order list of question IDs
+  private persistedQuestionOrder: string[] = [];
+  skillOrder: string[] = [];
   currentQuestionIndex: number = 0;
   selectedAnswer: string = '';
   quizCompleted: boolean = false;
@@ -23,6 +26,7 @@ export class AIQuizComponent implements OnInit, OnDestroy {
   questionTimers: { [key: string]: number } = {};
   lockedQuestions: { [key: string]: boolean } = {};
   shuffledOptions: { [questionId: string]: Array<{ key: string; value: string; originalKey: string }> } = {};
+  // All stored userAnswers use ORIGINAL option keys (a,b,c,d,...)
   loading = false;
 
   constructor(private aiQuizService: AIQuizService, private cdr: ChangeDetectorRef) { }
@@ -38,6 +42,11 @@ export class AIQuizComponent implements OnInit, OnDestroy {
         alert('No AI quiz assigned. Please contact your administrator.');
         window.location.href = '/';
         return;
+      }
+
+      // Capture skill order from user data
+      if (Array.isArray(userData.skill)) {
+        this.skillOrder = userData.skill;
       }
 
       const restoredState = this.aiQuizService.restoreQuizState();
@@ -59,6 +68,7 @@ export class AIQuizComponent implements OnInit, OnDestroy {
     this.userAnswers = state.userAnswers;
     this.testStarted = state.testStarted;
     this.restoreShuffledOptions();
+    this.restoreQuestionOrder();
   }
 
   loadQuestions() {
@@ -70,7 +80,18 @@ export class AIQuizComponent implements OnInit, OnDestroy {
     }
 
     this.aiQuizService.fetchApprovedQuestions(userId).subscribe(questions => {
-      this.questions = this.shuffleArray(questions);
+      // Persist or reuse existing order
+      if (this.persistedQuestionOrder.length === 0) {
+        const ordered = this.orderQuestionsBySkill(questions);
+        this.questions = ordered;
+        this.persistedQuestionOrder = ordered.map(q => q._id);
+        this.saveQuestionOrder();
+      } else {
+        // Rebuild questions in saved order (ignore any new extra questions for stability)
+        const map: { [id: string]: AIQuestion } = {};
+        questions.forEach(q => map[q._id] = q);
+        this.questions = this.persistedQuestionOrder.map(id => map[id]).filter(Boolean);
+      }
       this.loading = false;
       this.initializeQuizAfterLoad();
     });
@@ -97,7 +118,19 @@ export class AIQuizComponent implements OnInit, OnDestroy {
 
   private updateSelectedAnswerForCurrentQuestion() {
     const currentQuestionId = this.currentQuestion?._id;
-    this.selectedAnswer = currentQuestionId ? this.userAnswers[currentQuestionId] || '' : '';
+    if (!currentQuestionId) { this.selectedAnswer = ''; return; }
+    let stored = this.userAnswers[currentQuestionId] || '';
+    // Migration: if old letter key (A-D) stored, map back via shuffledOptions
+    if (/^[A-Z]$/.test(stored)) {
+      const mapping = this.shuffledOptions[currentQuestionId] || [];
+      const found = mapping.find(o => o.key === stored);
+      if (found) {
+        stored = found.originalKey;
+        this.userAnswers[currentQuestionId] = stored;
+        this.aiQuizService.saveQuizState({ userAnswers: this.userAnswers });
+      }
+    }
+    this.selectedAnswer = stored;
     this.cdr.detectChanges();
   }
 
@@ -132,6 +165,7 @@ export class AIQuizComponent implements OnInit, OnDestroy {
   }
 
   onAnswerSelect(option: string): void {
+    // 'option' is original key
     this.selectedAnswer = option;
     const currentQuestionId = this.currentQuestion?._id;
     if (currentQuestionId) {
@@ -253,10 +287,7 @@ export class AIQuizComponent implements OnInit, OnDestroy {
     this.isSubmitting = true;
     
     const questionResponses = this.questions.map(q => {
-      const shuffledOptions = this.shuffledOptions[q._id] || [];
-      const selectedOption = shuffledOptions.find(opt => opt.key === this.userAnswers[q._id]);
-      const originalAnswer = selectedOption ? selectedOption.originalKey : this.userAnswers[q._id] || '';
-      
+      const originalAnswer = this.userAnswers[q._id] || '';
       return {
         questionId: q._id,
         question: q.question,
@@ -275,7 +306,9 @@ export class AIQuizComponent implements OnInit, OnDestroy {
         this.testStarted = false;
         this.isSubmitting = false;
         this.aiQuizService.clearQuizStorage();
-        localStorage.setItem('aiQuizCompleted', 'true');
+        // Set completion flag using user-specific key
+        const userKey = `aiQuiz_${userId}_quizCompleted`;
+        localStorage.setItem(userKey, 'true');
       },
       error: () => {
         alert('Error submitting quiz. Please try again.');
@@ -296,49 +329,29 @@ export class AIQuizComponent implements OnInit, OnDestroy {
     this.updateSelectedAnswerForCurrentQuestion();
   }
 
-  getOptions(q?: any): Array<{ key: string; value: string; originalKey: string }> {
+  getOptions(q?: any): Array<{ key: string; value: string; originalKey: string; displayKey: string }> {
     const qq = q || this.currentQuestion;
     if (!qq) return [];
-
-    // Check if we already have shuffled options for this question
-    if (this.shuffledOptions[qq._id]) {
-      return this.shuffledOptions[qq._id];
-    }
-
-    // Create original options with original keys
-    const originalOptions: Array<{ key: string; value: string; originalKey: string }> = [];
+    const base: Array<{ originalKey: string; value: string }> = [];
     if (qq.options) {
-      Object.entries(qq.options).forEach(([key, value]) => {
-        originalOptions.push({ 
-          key: key.toUpperCase(), 
-          value: String(value),
-          originalKey: key.toLowerCase()
-        });
-      });
+      Object.entries(qq.options).forEach(([k, v]) => base.push({ originalKey: k.toLowerCase(), value: String(v) }));
     }
-
-    // Shuffle the options using Fisher-Yates algorithm
-    const shuffled = [...originalOptions];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-
-    // Assign new display keys (A, B, C, D) but keep original keys for answer checking
-    const shuffledWithNewKeys = shuffled.map((option, index) => ({
-      key: String.fromCharCode(65 + index), // A, B, C, D
-      value: option.value,
-      originalKey: option.originalKey
+    const userId = this.aiQuizService.getUserIdFromToken() || 'guest';
+    const seed = `${userId}_${qq._id}`;
+    const shuffled = this.deterministicShuffle([...base], seed);
+    const mapped = shuffled.map((o, idx) => ({
+      key: o.originalKey,
+      value: o.value,
+      originalKey: o.originalKey,
+      displayKey: String.fromCharCode(65 + idx)
     }));
-
-    // Store shuffled options for this question
-    this.shuffledOptions[qq._id] = shuffledWithNewKeys;
+    this.shuffledOptions[qq._id] = mapped.map(m => ({ key: m.displayKey, value: m.value, originalKey: m.originalKey }));
     this.saveShuffledOptions();
-    return shuffledWithNewKeys;
+    return mapped;
   }
 
   trackByOptionKey(index: number, option: any): string {
-    return option.key || index;
+    return option.originalKey || option.key || index;
   }
 
   get formattedTimer(): string {
@@ -356,6 +369,39 @@ export class AIQuizComponent implements OnInit, OnDestroy {
     return shuffled;
   }
 
+  private orderQuestionsBySkill(questions: AIQuestion[]): AIQuestion[] {
+    if (!questions || questions.length === 0) return [];
+    
+    // If no skill order defined, fallback to shuffle
+    if (!this.skillOrder || this.skillOrder.length === 0) {
+      return this.shuffleArray(questions);
+    }
+
+    // Group questions by skill
+    const questionsBySkill: { [skill: string]: AIQuestion[] } = {};
+    questions.forEach(q => {
+      const skill = q.skill || '';
+      if (!questionsBySkill[skill]) questionsBySkill[skill] = [];
+      questionsBySkill[skill].push(q);
+    });
+
+    // Order by skill sequence, shuffle within each skill group
+    const orderedQuestions: AIQuestion[] = [];
+    this.skillOrder.forEach(skill => {
+      if (questionsBySkill[skill] && questionsBySkill[skill].length > 0) {
+        orderedQuestions.push(...this.shuffleArray(questionsBySkill[skill]));
+        delete questionsBySkill[skill];
+      }
+    });
+
+    // Append any remaining skills not in the ordered list
+    Object.values(questionsBySkill).forEach(skillQuestions => {
+      orderedQuestions.push(...this.shuffleArray(skillQuestions));
+    });
+
+    return orderedQuestions;
+  }
+
   private saveShuffledOptions(): void {
     const userId = this.aiQuizService.getUserIdFromToken();
     if (!userId) return;
@@ -364,6 +410,25 @@ export class AIQuizComponent implements OnInit, OnDestroy {
       JSON.stringify(this.shuffledOptions)
     );
   }
+
+  private saveQuestionOrder(): void {
+    const userId = this.aiQuizService.getUserIdFromToken();
+    if (!userId) return;
+    localStorage.setItem(`aiQuestionOrder_${userId}`, JSON.stringify(this.persistedQuestionOrder));
+  }
+  private restoreQuestionOrder(): void {
+    try {
+      const userId = this.aiQuizService.getUserIdFromToken();
+      if (!userId) return;
+      const s = localStorage.getItem(`aiQuestionOrder_${userId}`);
+      if (s) this.persistedQuestionOrder = JSON.parse(s) || [];
+    } catch { this.persistedQuestionOrder = []; }
+  }
+
+  // Deterministic shuffle helpers
+  private hashString(str: string): number { let h = 0x811c9dc5; for (let i=0;i<str.length;i++){ h ^= str.charCodeAt(i); h = (h + (h<<1)+(h<<4)+(h<<7)+(h<<8)+(h<<24))>>>0;} return h>>>0; }
+  private rng(seed: number){ return function(){ seed|=0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed>>>15, 1|seed); t = t + Math.imul(t ^ t>>>7, 61|t) ^ t; return ((t ^ t>>>14)>>>0)/4294967296; }; }
+  private deterministicShuffle<T>(arr:T[], seedStr:string):T[]{ const rand=this.rng(this.hashString(seedStr)); for(let i=arr.length-1;i>0;i--){ const j=Math.floor(rand()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]];} return arr; }
 
   private restoreShuffledOptions(): void {
     try {

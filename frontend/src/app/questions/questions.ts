@@ -1,5 +1,6 @@
 // questions.ts - Updated TypeScript component
 import { Component, OnInit } from '@angular/core';
+import { Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -65,9 +66,14 @@ export class QuestionsComponent implements OnInit {
 
   private apiUrl = `${environment.apiUrl}/questions`;
 
-  constructor(private http: HttpClient) { }
+  constructor(private http: HttpClient, private router: Router) { }
 
   ngOnInit(): void {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      this.router.navigate(['/login']);
+      return;
+    }
     this.loadQuestions();
   }
 

@@ -77,26 +77,26 @@
               [class.opacity-60]="lockedQuestions[currentQuestion._id]"
               [class.hover:bg-gray-50]="!lockedQuestions[currentQuestion._id]"
               [class.dark:hover:bg-gray-700]="!lockedQuestions[currentQuestion._id]"
-              (click)="!lockedQuestions[currentQuestion._id] ? onOptionClick(option.key) : null">
+              (click)="!lockedQuestions[currentQuestion._id] ? onOptionClick(option.originalKey || option.key) : null">
 
               <!-- Checkbox for multiple correct type -->
               <input *ngIf="currentQuestion.type === 'multiple'; else singleChoiceTemplate" type="checkbox"
-                [value]="option.key" [checked]="selectedAnswers.includes(option.key)"
+                [value]="option.originalKey || option.key" [checked]="selectedAnswers.includes(option.originalKey || option.key)"
                 [disabled]="lockedQuestions[currentQuestion._id]"
                 class="h-4 w-4 text-blue-600 dark:text-blue-400 focus:ring-blue-500 dark:focus:ring-blue-400 border-gray-300 dark:border-gray-600"
-                (change)="!lockedQuestions[currentQuestion._id] ? onMultipleAnswerChange($event, option.key) : null" />
+                (change)="!lockedQuestions[currentQuestion._id] ? onMultipleAnswerChange($event, option.originalKey || option.key) : null" />
 
               <!-- Single choice and true/false radios -->
               <ng-template #singleChoiceTemplate>
-                <input type="radio" [name]="'question_' + currentQuestion._id" [value]="option.key"
+                <input type="radio" [name]="'question_' + currentQuestion._id" [value]="option.originalKey || option.key"
                   [(ngModel)]="selectedAnswer"
-                  (change)="!lockedQuestions[currentQuestion._id] ? onAnswerSelect(option.key) : null"
+                  (change)="!lockedQuestions[currentQuestion._id] ? onAnswerSelect(option.originalKey || option.key) : null"
                   class="h-4 w-4 text-blue-600 dark:text-blue-400 focus:ring-blue-500 dark:focus:ring-blue-400 border-gray-300 dark:border-gray-600"
                   [disabled]="lockedQuestions[currentQuestion._id]" />
               </ng-template>
 
               <span class="ml-3 text-gray-700 dark:text-gray-200">
-                {{ option.key.toUpperCase() }}. {{ option.value }}
+                {{ (option.displayKey || option.key).toUpperCase() }}. {{ option.value }}
               </span>
             </label>
           </div>

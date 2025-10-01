@@ -241,6 +241,7 @@ export const cascadeUpdateUser = async (req: Request, res: Response) => {
 
     const updateData: any = {};
 
+    // Handle removed levels
     if (removedLevels && removedLevels.length > 0) {
       for (const { skill, level } of removedLevels) {
         if (questionCounts && questionCounts[skill]) {
@@ -256,6 +257,44 @@ export const cascadeUpdateUser = async (req: Request, res: Response) => {
       if (!['removedSkills', 'removedLevels', 'questionCounts', 'skill'].includes(key)) {
         updateData[key] = value;
       }
+    }
+
+    // Clear assignedQuestions for removed skills and levels
+    if (user.assignedQuestions) {
+      // Convert to Map if it's a plain object from MongoDB
+      let assignedQuestionsMap: Map<string, string[]>;
+      if (user.assignedQuestions instanceof Map) {
+        assignedQuestionsMap = user.assignedQuestions;
+      } else {
+        assignedQuestionsMap = new Map<string, string[]>();
+        for (const [key, value] of Object.entries(user.assignedQuestions as any)) {
+          assignedQuestionsMap.set(key, value as string[]);
+        }
+      }
+
+      // Remove entries for removed skills (all levels)
+      if (removedSkills && removedSkills.length > 0) {
+        for (const removedSkill of removedSkills) {
+          // Create safe key format
+          const safeSkill = removedSkill.replace(/\./g, '__');
+          // Remove all entries that start with this skill
+          const keysToRemove = Array.from(assignedQuestionsMap.keys()).filter(key => 
+            key.startsWith(`${safeSkill}_`)
+          );
+          keysToRemove.forEach(key => assignedQuestionsMap.delete(key));
+        }
+      }
+
+      // Remove entries for removed levels (specific skill-level combinations)
+      if (removedLevels && removedLevels.length > 0) {
+        for (const { skill: levelSkill, level } of removedLevels) {
+          const safeSkill = levelSkill.replace(/\./g, '__');
+          const key = `${safeSkill}_${level}`;
+          assignedQuestionsMap.delete(key);
+        }
+      }
+
+      updateData.assignedQuestions = assignedQuestionsMap;
     }
 
     let updatedUser = null;

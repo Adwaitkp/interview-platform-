@@ -358,12 +358,16 @@
 
             <div class="flex justify-between items-start mb-2">
               <span class="font-medium text-gray-900 dark:text-white">Question {{ i + 1 }}</span>
-              <span
-                [class]="question.userAnswer?.toLowerCase() === question.correctanswer?.toLowerCase() ? 'text-green-600' : 'text-red-600'"
-                class="font-semibold">
-                {{ question.userAnswer?.toLowerCase() === question.correctanswer?.toLowerCase() ? '✓ Correct' : '✗
-                Incorrect' }}
-              </span>
+              <ng-container *ngIf="question.userAnswer; else aiNotAttempted">
+                <span
+                  [class]="question.userAnswer?.toLowerCase() === question.correctanswer?.toLowerCase() ? 'text-green-600' : 'text-red-600'"
+                  class="font-semibold">
+                  {{ question.userAnswer?.toLowerCase() === question.correctanswer?.toLowerCase() ? '✓ Correct' : '✗ Incorrect' }}
+                </span>
+              </ng-container>
+              <ng-template #aiNotAttempted>
+                <span class="font-semibold text-orange-500">Not Attempted</span>
+              </ng-template>
             </div>
 
             <p class="text-gray-800 dark:text-gray-200 mb-3">{{ question.question }}</p>
@@ -375,15 +379,15 @@
                 [class.dark:bg-green-900]="isCorrectOption(question, option)"
                 [class.bg-red-100]="isUserSelectedOption(question, option) && !isCorrectOption(question, option)"
                 [class.dark:bg-red-900]="isUserSelectedOption(question, option) && !isCorrectOption(question, option)"
-                [class.bg-blue-100]="question.userAnswer?.toLowerCase() === option.toLowerCase() && question.userAnswer?.toLowerCase() === question.correctanswer?.toLowerCase()"
-                [class.dark:bg-blue-900]="question.userAnswer?.toLowerCase() === option.toLowerCase() && question.userAnswer?.toLowerCase() === question.correctanswer?.toLowerCase()">
-                <span class="font-medium dark:text-white">{{ option.toUpperCase() }}.</span> <span
-                  class="dark:text-gray-200">{{ question.options[option] }}</span>
+                [class.bg-blue-100]="isUserSelectedOption(question, option) && isCorrectOption(question, option)"
+                [class.dark:bg-blue-900]="isUserSelectedOption(question, option) && isCorrectOption(question, option)">
+                <span class="font-medium dark:text-white">{{ option.toUpperCase() }}.</span>
+                <span class="dark:text-gray-200">{{ question.options[option] }}</span>
+                <span *ngIf="isUserSelectedOption(question, option)" class="ml-1 text-blue-600 italic">(marked)</span>
                 <span *ngIf="question.correctanswer?.toLowerCase() === option.toLowerCase()"
                   class="ml-2 text-green-600 font-bold">✓</span>
-                <span
-                  *ngIf="question.userAnswer?.toLowerCase() === option.toLowerCase() && question.userAnswer?.toLowerCase() !== question.correctanswer?.toLowerCase()"
-                  class="ml-2 text-red-600 font-bold">✗</span>
+                <span *ngIf="isUserSelectedOption(question, option) && question.correctanswer?.toLowerCase() !== option.toLowerCase()"
+                  class="ml-2 text-red-600 font-bold" style="line-height:1">✗</span>
               </div>
             </div>
 
@@ -432,12 +436,16 @@
 
             <div class="flex justify-between items-start mb-2">
               <span class="font-medium text-gray-900 dark:text-white">Question {{ i + 1 }}</span>
-              <span
-                [class]="(question.isCorrect || question.userAnswer?.toLowerCase() === question.correctanswer?.toLowerCase()) ? 'text-green-600' : 'text-red-600'"
-                class="font-semibold">
-                {{ (question.isCorrect || question.userAnswer?.toLowerCase() === question.correctanswer?.toLowerCase())
-                ? '✓ Correct' : '✗ Incorrect' }}
-              </span>
+              <ng-container *ngIf="question.userAnswer; else normalNotAttempted">
+                <span
+                  [class]="(question.isCorrect || question.userAnswer?.toLowerCase() === question.correctanswer?.toLowerCase()) ? 'text-green-600' : 'text-red-600'"
+                  class="font-semibold">
+                  {{ (question.isCorrect || question.userAnswer?.toLowerCase() === question.correctanswer?.toLowerCase()) ? '✓ Correct' : '✗ Incorrect' }}
+                </span>
+              </ng-container>
+              <ng-template #normalNotAttempted>
+                <span class="font-semibold text-orange-500">Not Attempted</span>
+              </ng-template>
             </div>
 
             <p class="text-gray-800 dark:text-gray-200 mb-3">{{ question.question }}</p>
@@ -448,16 +456,19 @@
                 [class.bg-green-100]="isCorrectOption(question, option)"
                 [class.dark:bg-green-900]="isCorrectOption(question, option)"
                 [class.bg-red-100]="isUserSelectedOption(question, option) && !isCorrectOption(question, option)"
-                [class.dark:bg-red-900]="isUserSelectedOption(question, option) && !isCorrectOption(question, option)">
-                <span class="font-medium dark:text-white">{{ option.toUpperCase() }}.</span> <span
-                  class="dark:text-gray-200">{{ getOptionText(question, option) }}</span>
+                [class.dark:bg-red-900]="isUserSelectedOption(question, option) && !isCorrectOption(question, option)"
+                [class.bg-blue-100]="isUserSelectedOption(question, option) && isCorrectOption(question, option)"
+                [class.dark:bg-blue-900]="isUserSelectedOption(question, option) && isCorrectOption(question, option)">
+                <span class="font-medium dark:text-white">{{ option.toUpperCase() }}.</span>
+                <span class="dark:text-gray-200">{{ getOptionText(question, option) }}</span>
+                <span *ngIf="isUserSelectedOption(question, option)" class="ml-1 text-blue-600 italic">(marked)</span>
                 <span *ngIf="question.correctanswer === option" class="ml-2 text-green-600 font-bold">✓</span>
               </div>
             </div>
 
             <div class="text-sm text-gray-600 dark:text-gray-400">
-              <span class="font-medium">User's Answer:</span> {{ question.userAnswer.toUpperCase() }}
-              <span *ngIf="!question.isCorrect" class="ml-2">
+              <span class="font-medium">User's Answer:</span> {{ question.userAnswer ? question.userAnswer.toUpperCase() : 'Not answered' }}
+              <span *ngIf="question.userAnswer && !question.isCorrect" class="ml-2">
                 <span class="font-medium">Correct Answer:</span> {{ question.correctanswer.toUpperCase() }}
               </span>
             </div>
